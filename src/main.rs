@@ -243,7 +243,8 @@ fn construct_config(mut opts: Opts, pattern_regexps: &[String]) -> Result<Config
         HyperlinkWhen::Auto => colored_output,
     };
     let command = extract_command(&mut opts, colored_output)?;
-    let has_command = command.is_some();
+    let has_command = command.is_some() || opts.list_details;
+    let sort = opts.sort.as_ref().map(|expr| expr.0.clone());
 
     Ok(Config {
         case_sensitive,
@@ -265,9 +266,11 @@ fn construct_config(mut opts: Opts, pattern_regexps: &[String]) -> Result<Config
         prune: opts.prune,
         threads: opts.threads().get(),
         max_buffer_time: opts.max_buffer_time,
+        sort,
         ls_colors,
         hyperlink,
         interactive_terminal,
+        list_details: opts.list_details,
         file_types: opts.filetype.as_ref().map(|values| {
             use crate::cli::FileType::*;
             let mut file_types = FileTypes::default();
@@ -331,20 +334,40 @@ fn construct_config(mut opts: Opts, pattern_regexps: &[String]) -> Result<Config
 }
 
 fn extract_command(opts: &mut Opts, colored_output: bool) -> Result<Option<CommandSet>> {
-    opts.exec
-        .command
-        .take()
-        .map(Ok)
-        .or_else(|| {
-            if !opts.list_details {
-                return None;
-            }
+    if let Some(command) = opts.exec.command.take() {
+        return Ok(Some(command));
+    }
 
-            let res = determine_ls_command(colored_output)
-                .map(|cmd| CommandSet::new_batch([cmd]).unwrap());
-            Some(res)
-        })
-        .transpose()
+    if !opts.list_details {
+        return Ok(None);
+    }
+
+    if opts.sort.is_some() {
+        // Sorting with --list-details requires fd-controlled ordering, so use the
+        // internal long-listing implementation instead of shelling out to `ls`.
+        return Ok(None);
+    }
+
+    #[cfg(windows)]
+    if !gnu_ls_available() {
+        // Fall back to fd's native --list-details output on Windows.
+        return Ok(None);
+    }
+
+    let cmd = determine_ls_command(colored_output)?;
+    Ok(Some(CommandSet::new_batch([cmd]).unwrap()))
+}
+
+#[cfg(windows)]
+fn gnu_ls_available() -> bool {
+    use std::process::{Command, Stdio};
+
+    Command::new("ls")
+        .arg("--version")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok()
 }
 
 fn determine_ls_command(colored_output: bool) -> Result<Vec<&'static str>> {

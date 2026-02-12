@@ -90,6 +90,9 @@ _fd() {
     + '(long-listing)' # long-listing output
     '(abs-path null-sep max-results exec-cmds)'{-l,--list-details}'[use a long listing format with file metadata]'
 
+    + '(sort-order)' # result sorting
+    '(long-listing exec-cmds)'{-R+,--sort=}'[sort results by modified/accessed timestamps]:sort expression'
+
     + '(max-results)' # max number of results
     '(long-listing exec-cmds)--max-results=[limit number of search results to given count and quit]:count'
     '(long-listing exec-cmds)-1[limit to a single search result and quit]'

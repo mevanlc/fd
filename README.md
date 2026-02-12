@@ -202,7 +202,8 @@ by running `ls` for each result:
 fd … -X ls -lhd --color=always
 ```
 This pattern is so useful that `fd` provides a shortcut. You can use the `-l`/`--list-details`
-option to execute `ls` in this way: `fd … -l`.
+option for this long-listing output (`ls`-backed on Unix, native fallback on Windows): `fd … -l`.
+If you combine this with `-R`/`--sort`, fd will force the internal long-listing implementation.
 
 The `-X` option is also useful when combining `fd` with [ripgrep](https://github.com/BurntSushi/ripgrep/) (`rg`) in order to search within a certain class of files, like all C++ source files:
 ```bash
@@ -325,6 +326,7 @@ Options:
   -g, --glob                       Glob-based search (default: regular expression)
   -a, --absolute-path              Show absolute instead of relative paths
   -l, --list-details               Use a long listing format with file metadata
+  -R, --sort <sort>                Sort results by modified/accessed timestamps
   -L, --follow                     Follow symbolic links
   -p, --full-path                  Search full abs. path (default: filename only)
   -d, --max-depth <depth>          Set maximum search depth (default: none)

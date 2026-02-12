@@ -1,10 +1,20 @@
 use std::borrow::Cow;
+use std::fs::Metadata;
 use std::io::{self, Write};
+use std::time::UNIX_EPOCH;
+
+#[cfg(unix)]
+use nix::unistd::{Gid, Group, Uid, User};
+#[cfg(unix)]
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
+#[cfg(windows)]
+use std::os::windows::fs::MetadataExt;
 
 use lscolors::{Indicator, LsColors, Style};
 
 use crate::config::Config;
 use crate::dir_entry::DirEntry;
+use crate::filesystem;
 use crate::fmt::FormatTemplate;
 use crate::hyperlink::PathUrl;
 
@@ -22,7 +32,9 @@ pub fn print_entry<W: Write>(stdout: &mut W, entry: &DirEntry, config: &Config) 
         has_hyperlink = true;
     }
 
-    if let Some(ref format) = config.format {
+    if config.list_details {
+        print_entry_list_details(stdout, entry, config)?;
+    } else if let Some(ref format) = config.format {
         print_entry_format(stdout, entry, config, format)?;
     } else if let Some(ref ls_colors) = config.ls_colors {
         print_entry_colorized(stdout, entry, config, ls_colors)?;
@@ -38,6 +50,186 @@ pub fn print_entry<W: Write>(stdout: &mut W, entry: &DirEntry, config: &Config) 
         write!(stdout, "\0")
     } else {
         writeln!(stdout)
+    }
+}
+
+fn print_entry_list_details<W: Write>(
+    stdout: &mut W,
+    entry: &DirEntry,
+    config: &Config,
+) -> io::Result<()> {
+    let file_type = file_type_char(entry);
+    let permissions = entry
+        .metadata()
+        .map(format_permissions)
+        .unwrap_or_else(|| "---------".to_string());
+    let links = entry.metadata().map(number_of_links).unwrap_or(0);
+    let (owner, group) = entry
+        .metadata()
+        .map(owner_group)
+        .unwrap_or_else(|| (String::from("-"), String::from("-")));
+    let size = entry
+        .metadata()
+        .map(|m| format_human_size(m.len()))
+        .unwrap_or_else(|| "?".to_string());
+    let modified = entry
+        .metadata()
+        .map(format_modified_timestamp)
+        .unwrap_or_else(|| "-".to_string());
+    let path = format_path_with_symlink_target(entry, config);
+
+    write!(
+        stdout,
+        "{file_type}{permissions} {links:>2} {owner:<8} {group:<8} {size:>5} {modified} {path}"
+    )
+}
+
+fn format_path_with_symlink_target(entry: &DirEntry, config: &Config) -> String {
+    let mut path = entry.stripped_path(config).to_string_lossy().to_string();
+    if let Some(ref separator) = config.path_separator {
+        path = replace_path_separator(&path, separator);
+    }
+
+    if entry.file_type().is_some_and(|ft| ft.is_dir()) {
+        path.push_str(&config.actual_path_separator);
+    }
+
+    if entry.file_type().is_some_and(|ft| ft.is_symlink())
+        && let Ok(target) = std::fs::read_link(entry.path())
+    {
+        let mut target = target.to_string_lossy().to_string();
+        if let Some(ref separator) = config.path_separator {
+            target = replace_path_separator(&target, separator);
+        }
+        path.push_str(" -> ");
+        path.push_str(&target);
+    }
+
+    path
+}
+
+fn file_type_char(entry: &DirEntry) -> char {
+    if let Some(ft) = entry.file_type() {
+        if ft.is_dir() {
+            return 'd';
+        }
+        if ft.is_symlink() {
+            return 'l';
+        }
+        if filesystem::is_block_device(ft) {
+            return 'b';
+        }
+        if filesystem::is_char_device(ft) {
+            return 'c';
+        }
+        if filesystem::is_socket(ft) {
+            return 's';
+        }
+        if filesystem::is_pipe(ft) {
+            return 'p';
+        }
+        if ft.is_file() {
+            return '-';
+        }
+    }
+
+    '?'
+}
+
+#[cfg(unix)]
+fn format_permissions(metadata: &Metadata) -> String {
+    let mode = metadata.permissions().mode();
+    let mut chars = ['-'; 9];
+    for (idx, (bit, ch)) in [
+        (0o400, 'r'),
+        (0o200, 'w'),
+        (0o100, 'x'),
+        (0o040, 'r'),
+        (0o020, 'w'),
+        (0o010, 'x'),
+        (0o004, 'r'),
+        (0o002, 'w'),
+        (0o001, 'x'),
+    ]
+    .iter()
+    .enumerate()
+    {
+        if mode & bit != 0 {
+            chars[idx] = *ch;
+        }
+    }
+    chars.iter().collect()
+}
+
+#[cfg(windows)]
+fn format_permissions(metadata: &Metadata) -> String {
+    if metadata.permissions().readonly() {
+        "r--r--r--".to_string()
+    } else {
+        "rw-rw-rw-".to_string()
+    }
+}
+
+#[cfg(unix)]
+fn number_of_links(metadata: &Metadata) -> u64 {
+    metadata.nlink()
+}
+
+#[cfg(windows)]
+fn number_of_links(metadata: &Metadata) -> u64 {
+    metadata.number_of_links()
+}
+
+#[cfg(unix)]
+fn owner_group(metadata: &Metadata) -> (String, String) {
+    let uid = Uid::from_raw(metadata.uid());
+    let gid = Gid::from_raw(metadata.gid());
+
+    let owner = User::from_uid(uid)
+        .ok()
+        .flatten()
+        .map(|u| u.name)
+        .unwrap_or_else(|| uid.as_raw().to_string());
+    let group = Group::from_gid(gid)
+        .ok()
+        .flatten()
+        .map(|g| g.name)
+        .unwrap_or_else(|| gid.as_raw().to_string());
+
+    (owner, group)
+}
+
+#[cfg(windows)]
+fn owner_group(_: &Metadata) -> (String, String) {
+    (String::from("-"), String::from("-"))
+}
+
+fn format_modified_timestamp(metadata: &Metadata) -> String {
+    metadata
+        .modified()
+        .ok()
+        .and_then(|ts| ts.duration_since(UNIX_EPOCH).ok())
+        .map(|d| d.as_secs().to_string())
+        .unwrap_or_else(|| "-".to_string())
+}
+
+fn format_human_size(size: u64) -> String {
+    const UNITS: &[&str] = &["B", "K", "M", "G", "T", "P"];
+    if size < 1024 {
+        return size.to_string();
+    }
+
+    let mut value = size as f64;
+    let mut unit = 0usize;
+    while value >= 1024.0 && unit + 1 < UNITS.len() {
+        value /= 1024.0;
+        unit += 1;
+    }
+
+    if value >= 10.0 {
+        format!("{value:.0}{}", UNITS[unit])
+    } else {
+        format!("{value:.1}{}", UNITS[unit])
     }
 }
 

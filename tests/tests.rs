@@ -2312,6 +2312,28 @@ fn change_file_modified<P: AsRef<Path>>(path: P, iso_date: &str) {
     filetime::set_file_times(path, ft, ft).expect("time modification failde");
 }
 
+#[cfg(test)]
+fn create_file_with_accessed_and_modified<P: AsRef<Path>>(
+    path: P,
+    accessed_iso_date: &str,
+    modified_iso_date: &str,
+) {
+    let accessed = accessed_iso_date
+        .parse::<Timestamp>()
+        .map(SystemTime::from)
+        .expect("invalid access date");
+    let modified = modified_iso_date
+        .parse::<Timestamp>()
+        .map(SystemTime::from)
+        .expect("invalid modified date");
+
+    fs::File::create(&path).expect("creation failed");
+
+    let accessed_ft = filetime::FileTime::from_system_time(accessed);
+    let modified_ft = filetime::FileTime::from_system_time(modified);
+    filetime::set_file_times(path, accessed_ft, modified_ft).expect("time modification failed");
+}
+
 #[test]
 fn test_modified_absolute() {
     let te = TestEnv::new(&[], &["15mar2018", "30dec2017"]);
@@ -2326,6 +2348,90 @@ fn test_modified_absolute() {
     te.assert_output(
         &["", "--changed-before", "2018-01-01 00:00:00"],
         "30dec2017",
+    );
+}
+
+#[test]
+fn test_sort_modified() {
+    let te = TestEnv::new(&[], &[]);
+    remove_symlink(te.test_root().join("symlink"));
+
+    create_file_with_modified(te.test_root().join("new"), 0);
+    create_file_with_modified(te.test_root().join("mid"), 60);
+    create_file_with_modified(te.test_root().join("old"), 120);
+
+    let output = te.assert_success_and_get_output(".", &["", "--sort", "m"]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(
+        stdout.lines().collect::<Vec<_>>(),
+        vec!["old", "mid", "new"]
+    );
+
+    let output = te.assert_success_and_get_output(".", &["", "--sort", "-m"]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(
+        stdout.lines().collect::<Vec<_>>(),
+        vec!["new", "mid", "old"]
+    );
+}
+
+#[test]
+fn test_sort_with_list_details_uses_sorted_order() {
+    let te = TestEnv::new(&[], &[]);
+    remove_symlink(te.test_root().join("symlink"));
+
+    create_file_with_modified(te.test_root().join("a_new"), 0);
+    create_file_with_modified(te.test_root().join("z_old"), 120);
+
+    let output = te.assert_success_and_get_output(".", &["", "--list-details", "--sort", "m"]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let lines: Vec<_> = stdout.lines().collect();
+    assert_eq!(2, lines.len());
+    let names: Vec<_> = lines
+        .iter()
+        .map(|line| {
+            line.split_whitespace()
+                .last()
+                .unwrap()
+                .trim_start_matches("./")
+        })
+        .collect();
+    assert_eq!(names, vec!["z_old", "a_new"]);
+}
+
+#[test]
+fn test_sort_accessed_and_multi_key() {
+    let te = TestEnv::new(&[], &[]);
+    remove_symlink(te.test_root().join("symlink"));
+
+    create_file_with_accessed_and_modified(
+        te.test_root().join("m1_a3"),
+        "2024-01-01T00:00:03Z",
+        "2024-01-01T00:00:01Z",
+    );
+    create_file_with_accessed_and_modified(
+        te.test_root().join("m1_a2"),
+        "2024-01-01T00:00:02Z",
+        "2024-01-01T00:00:01Z",
+    );
+    create_file_with_accessed_and_modified(
+        te.test_root().join("m2_a1"),
+        "2024-01-01T00:00:01Z",
+        "2024-01-01T00:00:02Z",
+    );
+
+    let output = te.assert_success_and_get_output(".", &["", "--sort", "a"]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(
+        stdout.lines().collect::<Vec<_>>(),
+        vec!["m2_a1", "m1_a2", "m1_a3"]
+    );
+
+    let output = te.assert_success_and_get_output(".", &["", "--sort", "m-a"]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(
+        stdout.lines().collect::<Vec<_>>(),
+        vec!["m1_a3", "m1_a2", "m2_a1"]
     );
 }
 
@@ -2523,6 +2629,8 @@ fn test_list_details() {
 
     // Make sure we can execute 'fd --list-details' without any errors.
     te.assert_success_and_get_output(".", &["--list-details"]);
+    te.assert_success_and_get_output(".", &["--list-details", "--sort", "m"]);
+    te.assert_failure(&["--sort", "m", "--exec", "echo"]);
 }
 
 #[test]
@@ -2549,6 +2657,8 @@ fn test_number_parsing_errors() {
     te.assert_failure(&["--exact-depth=a"]);
 
     te.assert_failure(&["--max-buffer-time=a"]);
+    te.assert_failure(&["--sort=z"]);
+    te.assert_failure(&["--sort=m-"]);
 
     te.assert_failure(&["--max-results=a"]);
 }

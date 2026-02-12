@@ -1,12 +1,13 @@
 use std::borrow::Cow;
+use std::cmp::Ordering;
 use std::ffi::OsStr;
 use std::io::{self, Write};
 use std::mem;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use anyhow::{Result, anyhow};
 use crossbeam_channel::{Receiver, RecvTimeoutError, SendError, Sender, bounded};
@@ -16,6 +17,7 @@ use ignore::{WalkBuilder, WalkParallel, WalkState};
 use regex::bytes::Regex;
 
 use crate::config::Config;
+use crate::config::{SortBy, SortCriterion};
 use crate::dir_entry::DirEntry;
 use crate::error::print_error;
 use crate::exec;
@@ -174,7 +176,7 @@ impl<'a, W: Write> ReceiverBuffer<'a, W> {
     fn process(&mut self) -> ExitCode {
         loop {
             if let Err(ec) = self.poll() {
-                self.quit_flag.store(true, Ordering::Relaxed);
+                self.quit_flag.store(true, AtomicOrdering::Relaxed);
                 return ec;
             }
         }
@@ -182,6 +184,10 @@ impl<'a, W: Write> ReceiverBuffer<'a, W> {
 
     /// Receive the next worker result.
     fn recv(&self) -> Result<Batch, RecvTimeoutError> {
+        if self.config.sort.is_some() {
+            return Ok(self.rx.recv()?);
+        }
+
         match self.mode {
             ReceiverMode::Buffering => {
                 // Wait at most until we should switch to streaming
@@ -208,7 +214,9 @@ impl<'a, W: Write> ReceiverBuffer<'a, W> {
                             match self.mode {
                                 ReceiverMode::Buffering => {
                                     self.buffer.push(dir_entry);
-                                    if self.buffer.len() > MAX_BUFFER_LENGTH {
+                                    if self.config.sort.is_none()
+                                        && self.buffer.len() > MAX_BUFFER_LENGTH
+                                    {
                                         self.stream()?;
                                     }
                                 }
@@ -257,7 +265,7 @@ impl<'a, W: Write> ReceiverBuffer<'a, W> {
             return Err(ExitCode::GeneralError);
         }
 
-        if self.interrupt_flag.load(Ordering::Relaxed) {
+        if self.interrupt_flag.load(AtomicOrdering::Relaxed) {
             // Ignore any errors on flush, because we're about to exit anyway
             let _ = self.flush();
             return Err(ExitCode::KilledBySigint);
@@ -281,7 +289,7 @@ impl<'a, W: Write> ReceiverBuffer<'a, W> {
     /// Stop looping.
     fn stop(&mut self) -> Result<(), ExitCode> {
         if self.mode == ReceiverMode::Buffering {
-            self.buffer.sort();
+            self.sort_buffer();
             self.stream()?;
         }
 
@@ -299,6 +307,52 @@ impl<'a, W: Write> ReceiverBuffer<'a, W> {
             return Err(ExitCode::GeneralError);
         }
         Ok(())
+    }
+
+    /// Sort buffered entries according to the configured sort order.
+    fn sort_buffer(&mut self) {
+        if let Some(criteria) = &self.config.sort {
+            self.buffer
+                .sort_by(|left, right| compare_entries(left, right, criteria));
+        } else {
+            self.buffer.sort();
+        }
+    }
+}
+
+fn compare_entries(left: &DirEntry, right: &DirEntry, criteria: &[SortCriterion]) -> Ordering {
+    for criterion in criteria {
+        let left_time = timestamp_for(left, criterion.by);
+        let right_time = timestamp_for(right, criterion.by);
+
+        let ord = compare_optional_timestamps(left_time, right_time);
+        let ord = if criterion.reverse {
+            ord.reverse()
+        } else {
+            ord
+        };
+
+        if ord != Ordering::Equal {
+            return ord;
+        }
+    }
+
+    left.path().cmp(right.path())
+}
+
+fn timestamp_for(entry: &DirEntry, by: SortBy) -> Option<SystemTime> {
+    entry.metadata().and_then(|metadata| match by {
+        SortBy::Modified => metadata.modified().ok(),
+        SortBy::Accessed => metadata.accessed().ok(),
+    })
+}
+
+fn compare_optional_timestamps(left: Option<SystemTime>, right: Option<SystemTime>) -> Ordering {
+    match (left, right) {
+        (Some(left), Some(right)) => left.cmp(&right),
+        (None, Some(_)) => Ordering::Greater,
+        (Some(_), None) => Ordering::Less,
+        (None, None) => Ordering::Equal,
     }
 }
 
@@ -457,7 +511,7 @@ impl WorkerState {
             let mut tx = BatchSender::new(tx.clone(), limit);
 
             Box::new(move |entry| {
-                if quit_flag.load(Ordering::Relaxed) {
+                if quit_flag.load(AtomicOrdering::Relaxed) {
                     return WalkState::Quit;
                 }
 
@@ -640,9 +694,9 @@ impl WorkerState {
             let interrupt_flag = Arc::clone(&self.interrupt_flag);
 
             ctrlc::set_handler(move || {
-                quit_flag.store(true, Ordering::Relaxed);
+                quit_flag.store(true, AtomicOrdering::Relaxed);
 
-                if interrupt_flag.fetch_or(true, Ordering::Relaxed) {
+                if interrupt_flag.fetch_or(true, AtomicOrdering::Relaxed) {
                     // Ctrl-C has been pressed twice, exit NOW
                     ExitCode::KilledBySigint.exit();
                 }
@@ -662,7 +716,7 @@ impl WorkerState {
             receiver.join().unwrap()
         });
 
-        if self.interrupt_flag.load(Ordering::Relaxed) {
+        if self.interrupt_flag.load(AtomicOrdering::Relaxed) {
             Ok(ExitCode::KilledBySigint)
         } else {
             Ok(exit_code)

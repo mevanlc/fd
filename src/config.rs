@@ -70,6 +70,10 @@ pub struct Config {
     /// `max_buffer_time`.
     pub max_buffer_time: Option<Duration>,
 
+    /// Sort criteria for output results. If this is set, all results are buffered until
+    /// traversal finishes, then sorted.
+    pub sort: Option<Vec<SortCriterion>>,
+
     /// `None` if the output should not be colorized. Otherwise, a `LsColors` instance that defines
     /// how to style different filetypes.
     pub ls_colors: Option<LsColors>,
@@ -77,6 +81,9 @@ pub struct Config {
     /// Whether or not we are writing to an interactive terminal
     #[cfg_attr(not(unix), allow(unused))]
     pub interactive_terminal: bool,
+
+    /// Whether to print entries in a long listing format.
+    pub list_details: bool,
 
     /// The type of file to search for. If set to `None`, all file types are displayed. If
     /// set to `Some(..)`, only the types that are specified are shown.
@@ -140,4 +147,18 @@ impl Config {
     pub fn is_printing(&self) -> bool {
         self.command.is_none()
     }
+}
+
+/// Supported sort keys.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum SortBy {
+    Modified,
+    Accessed,
+}
+
+/// A sort key, with optional reverse ordering for that key.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct SortCriterion {
+    pub by: SortBy,
+    pub reverse: bool,
 }

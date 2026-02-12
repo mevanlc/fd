@@ -11,6 +11,7 @@ use clap::{
 use clap_complete::Shell;
 use normpath::PathExt;
 
+use crate::config::{SortBy, SortCriterion};
 use crate::error::print_error;
 use crate::exec::CommandSet;
 use crate::filesystem;
@@ -206,10 +207,11 @@ pub struct Opts {
     #[arg(long, overrides_with = "absolute_path", hide = true, action = ArgAction::SetTrue)]
     relative_path: (),
 
-    /// Use a detailed listing format like 'ls -l'. This is basically an alias
-    /// for '--exec-batch ls -l' with some additional 'ls' options. This can be
-    /// used to see more metadata, to show symlink targets and to achieve a
-    /// deterministic sort order.
+    /// Use a detailed listing format similar to 'ls -l'. On Unix platforms,
+    /// this is implemented via '--exec-batch ls -l' with additional options.
+    /// On Windows, fd falls back to a native implementation if GNU 'ls' is
+    /// unavailable. This can be used to see more metadata, to show symlink
+    /// targets and to achieve a deterministic sort order.
     #[arg(
         long,
         short = 'l',
@@ -218,6 +220,29 @@ pub struct Opts {
         long_help
     )]
     pub list_details: bool,
+
+    /// Sort search results by file timestamps.
+    ///
+    /// The value is parsed as a sequence of sort keys:
+    ///   sort          := reversible_by+
+    ///   reversible_by := '-'? by
+    ///   by            := 'm' | 'a'
+    ///
+    /// where 'm' means modified timestamp and 'a' means accessed timestamp.
+    /// Prefixing a key with '-' reverses the order for that key.
+    /// When combined with '--list-details', this forces fd's internal long-listing
+    /// implementation.
+    #[arg(
+        long,
+        short = 'R',
+        value_name = "sort",
+        value_parser = parse_sort,
+        allow_hyphen_values = true,
+        conflicts_with_all(["exec", "exec_batch"]),
+        help = "Sort results by modified/accessed timestamps",
+        long_help
+    )]
+    pub sort: Option<SortExpression>,
 
     /// Follow symbolic links
     #[arg(
@@ -829,6 +854,9 @@ pub enum HyperlinkWhen {
     Never,
 }
 
+#[derive(Clone, Debug)]
+pub struct SortExpression(pub Vec<SortCriterion>);
+
 // there isn't a derive api for getting grouped values yet,
 // so we have to use hand-rolled parsing for exec and exec-batch
 pub struct Exec {
@@ -932,6 +960,40 @@ impl clap::Args for Exec {
 
 fn parse_millis(arg: &str) -> Result<Duration, std::num::ParseIntError> {
     Ok(Duration::from_millis(arg.parse()?))
+}
+
+fn parse_sort(arg: &str) -> Result<SortExpression, String> {
+    let mut criteria = Vec::new();
+    let mut chars = arg.chars();
+
+    while let Some(ch) = chars.next() {
+        let (reverse, by_char) = if ch == '-' {
+            let next = chars
+                .next()
+                .ok_or_else(|| "Sort expression must not end with '-'".to_string())?;
+            (true, next)
+        } else {
+            (false, ch)
+        };
+
+        let by = match by_char {
+            'm' => SortBy::Modified,
+            'a' => SortBy::Accessed,
+            _ => {
+                return Err(format!(
+                    "Invalid sort key '{by_char}'. Use a sequence of 'm' and 'a' keys, optionally prefixed by '-'."
+                ));
+            }
+        };
+
+        criteria.push(SortCriterion { by, reverse });
+    }
+
+    if criteria.is_empty() {
+        return Err("Sort expression must not be empty".to_string());
+    }
+
+    Ok(SortExpression(criteria))
 }
 
 fn ensure_current_directory_exists(current_directory: &Path) -> anyhow::Result<()> {
