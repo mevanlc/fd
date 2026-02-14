@@ -326,7 +326,7 @@ Options:
   -g, --glob                       Glob-based search (default: regular expression)
   -a, --absolute-path              Show absolute instead of relative paths
   -l, --list-details               Use a long listing format with file metadata
-  -R, --sort <sort>                Sort results by modified/accessed timestamps
+  -R, --sort <mMsS...>             Sort by time or size. Uppercase reverses sort. See --help for more.
   -L, --follow                     Follow symbolic links
   -p, --full-path                  Search full abs. path (default: filename only)
   -d, --max-depth <depth>          Set maximum search depth (default: none)

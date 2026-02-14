@@ -11,7 +11,7 @@ use clap::{
 use clap_complete::Shell;
 use normpath::PathExt;
 
-use crate::config::{SortBy, SortCriterion};
+use crate::config::{SortBy, SortConfig, SortCriterion, SortTextOptions};
 use crate::error::print_error;
 use crate::exec::CommandSet;
 use crate::filesystem;
@@ -221,26 +221,26 @@ pub struct Opts {
     )]
     pub list_details: bool,
 
-    /// Sort search results by file timestamps.
+    /// Sort search results by file metadata. The value is a priority
+    /// sequence of sort fields. Lowercase is ascending, uppercase is descending.
     ///
-    /// The value is parsed as a sequence of sort keys:
-    ///   sort          := reversible_by+
-    ///   reversible_by := '-'? by
-    ///   by            := 'm' | 'a'
+    ///   s/S  size                       m/M  modified time
+    ///   n/N  basename                   c/C  changed time
+    ///   p/P  full path                  a/A  accessed time
+    ///   e/E  extension                  b/B  born time
+    ///   t/T  type (dir, file, ...)      i/I  inode
+    ///     z  case-insensitive collation   Z  natural number collation
     ///
-    /// where 'm' means modified timestamp and 'a' means accessed timestamp.
-    /// Prefixing a key with '-' reverses the order for that key.
-    /// When combined with '--list-details', this forces fd's internal long-listing
-    /// implementation.
+    /// With '--list-details': forces fd's internal long-listing implementation.
     #[arg(
         long,
         short = 'R',
-        value_name = "sort",
+        value_name = "mMsS...",
         value_parser = parse_sort,
-        allow_hyphen_values = true,
         conflicts_with_all(["exec", "exec_batch"]),
-        help = "Sort results by modified/accessed timestamps",
-        long_help
+        help = "Sort by time or size. Uppercase reverses sort. See --help for more.",
+        long_help,
+        verbatim_doc_comment
     )]
     pub sort: Option<SortExpression>,
 
@@ -855,7 +855,7 @@ pub enum HyperlinkWhen {
 }
 
 #[derive(Clone, Debug)]
-pub struct SortExpression(pub Vec<SortCriterion>);
+pub struct SortExpression(pub SortConfig);
 
 // there isn't a derive api for getting grouped values yet,
 // so we have to use hand-rolled parsing for exec and exec-batch
@@ -964,36 +964,46 @@ fn parse_millis(arg: &str) -> Result<Duration, std::num::ParseIntError> {
 
 fn parse_sort(arg: &str) -> Result<SortExpression, String> {
     let mut criteria = Vec::new();
-    let mut chars = arg.chars();
+    let mut text = SortTextOptions::default();
 
-    while let Some(ch) = chars.next() {
-        let (reverse, by_char) = if ch == '-' {
-            let next = chars
-                .next()
-                .ok_or_else(|| "Sort expression must not end with '-'".to_string())?;
-            (true, next)
-        } else {
-            (false, ch)
-        };
-
-        let by = match by_char {
-            'm' => SortBy::Modified,
-            'a' => SortBy::Accessed,
+    for ch in arg.chars() {
+        let by = match ch {
+            'n' | 'N' => SortBy::Basename,
+            'e' | 'E' => SortBy::Extension,
+            's' | 'S' => SortBy::Size,
+            't' | 'T' => SortBy::Type,
+            'c' | 'C' => SortBy::Changed,
+            'm' | 'M' => SortBy::Modified,
+            'a' | 'A' => SortBy::Accessed,
+            'b' | 'B' => SortBy::Born,
+            'i' | 'I' => SortBy::Inode,
+            'p' | 'P' => SortBy::Path,
+            'z' => {
+                text.case_insensitive = true;
+                continue;
+            }
+            'Z' => {
+                text.natural = true;
+                continue;
+            }
             _ => {
                 return Err(format!(
-                    "Invalid sort key '{by_char}'. Use a sequence of 'm' and 'a' keys, optionally prefixed by '-'."
+                    "Invalid sort key '{ch}'. Use a sequence of nNeEsStTcCmMaAbBiIpP with optional z/Z collation flags."
                 ));
             }
         };
 
-        criteria.push(SortCriterion { by, reverse });
+        criteria.push(SortCriterion {
+            by,
+            descending: ch.is_ascii_uppercase(),
+        });
     }
 
     if criteria.is_empty() {
-        return Err("Sort expression must not be empty".to_string());
+        return Err("Sort expression must include at least one sort field.".to_string());
     }
 
-    Ok(SortExpression(criteria))
+    Ok(SortExpression(SortConfig { criteria, text }))
 }
 
 fn ensure_current_directory_exists(current_directory: &Path) -> anyhow::Result<()> {

@@ -17,7 +17,7 @@ use ignore::{WalkBuilder, WalkParallel, WalkState};
 use regex::bytes::Regex;
 
 use crate::config::Config;
-use crate::config::{SortBy, SortCriterion};
+use crate::config::{SortBy, SortConfig, SortTextOptions};
 use crate::dir_entry::DirEntry;
 use crate::error::print_error;
 use crate::exec;
@@ -311,22 +311,19 @@ impl<'a, W: Write> ReceiverBuffer<'a, W> {
 
     /// Sort buffered entries according to the configured sort order.
     fn sort_buffer(&mut self) {
-        if let Some(criteria) = &self.config.sort {
+        if let Some(sort) = &self.config.sort {
             self.buffer
-                .sort_by(|left, right| compare_entries(left, right, criteria));
+                .sort_by(|left, right| compare_entries(left, right, sort));
         } else {
             self.buffer.sort();
         }
     }
 }
 
-fn compare_entries(left: &DirEntry, right: &DirEntry, criteria: &[SortCriterion]) -> Ordering {
-    for criterion in criteria {
-        let left_time = timestamp_for(left, criterion.by);
-        let right_time = timestamp_for(right, criterion.by);
-
-        let ord = compare_optional_timestamps(left_time, right_time);
-        let ord = if criterion.reverse {
+fn compare_entries(left: &DirEntry, right: &DirEntry, sort: &SortConfig) -> Ordering {
+    for criterion in &sort.criteria {
+        let ord = compare_entries_by(left, right, criterion.by, sort.text);
+        let ord = if criterion.descending {
             ord.reverse()
         } else {
             ord
@@ -340,20 +337,236 @@ fn compare_entries(left: &DirEntry, right: &DirEntry, criteria: &[SortCriterion]
     left.path().cmp(right.path())
 }
 
-fn timestamp_for(entry: &DirEntry, by: SortBy) -> Option<SystemTime> {
-    entry.metadata().and_then(|metadata| match by {
-        SortBy::Modified => metadata.modified().ok(),
-        SortBy::Accessed => metadata.accessed().ok(),
-    })
+fn compare_entries_by(
+    left: &DirEntry,
+    right: &DirEntry,
+    by: SortBy,
+    text: SortTextOptions,
+) -> Ordering {
+    match by {
+        SortBy::Path => compare_text_values(
+            Some(left.path().as_os_str()),
+            Some(right.path().as_os_str()),
+            text,
+        ),
+        SortBy::Basename => compare_text_values(
+            basename_or_path(left.path()),
+            basename_or_path(right.path()),
+            text,
+        ),
+        SortBy::Extension => {
+            compare_text_values(left.path().extension(), right.path().extension(), text)
+        }
+        SortBy::Type => compare_optional(type_rank_for(left), type_rank_for(right)),
+        SortBy::Changed => compare_optional(changed_for(left), changed_for(right)),
+        SortBy::Modified => compare_optional(modified_for(left), modified_for(right)),
+        SortBy::Accessed => compare_optional(accessed_for(left), accessed_for(right)),
+        SortBy::Born => compare_optional(born_for(left), born_for(right)),
+        SortBy::Inode => compare_optional(inode_for(left), inode_for(right)),
+        SortBy::Size => compare_optional(size_for(left), size_for(right)),
+    }
 }
 
-fn compare_optional_timestamps(left: Option<SystemTime>, right: Option<SystemTime>) -> Ordering {
+fn basename_or_path(path: &std::path::Path) -> Option<&OsStr> {
+    path.file_name().or(Some(path.as_os_str()))
+}
+
+fn compare_optional<T: Ord>(left: Option<T>, right: Option<T>) -> Ordering {
     match (left, right) {
         (Some(left), Some(right)) => left.cmp(&right),
         (None, Some(_)) => Ordering::Greater,
         (Some(_), None) => Ordering::Less,
         (None, None) => Ordering::Equal,
     }
+}
+
+fn size_for(entry: &DirEntry) -> Option<u64> {
+    entry.metadata().map(|metadata| metadata.len())
+}
+
+fn modified_for(entry: &DirEntry) -> Option<SystemTime> {
+    entry
+        .metadata()
+        .and_then(|metadata| metadata.modified().ok())
+}
+
+fn accessed_for(entry: &DirEntry) -> Option<SystemTime> {
+    entry
+        .metadata()
+        .and_then(|metadata| metadata.accessed().ok())
+}
+
+fn born_for(entry: &DirEntry) -> Option<SystemTime> {
+    entry
+        .metadata()
+        .and_then(|metadata| metadata.created().ok())
+}
+
+#[cfg(unix)]
+fn changed_for(entry: &DirEntry) -> Option<(i64, i64)> {
+    use std::os::unix::fs::MetadataExt;
+    entry
+        .metadata()
+        .map(|metadata| (metadata.ctime(), metadata.ctime_nsec()))
+}
+
+#[cfg(windows)]
+fn changed_for(entry: &DirEntry) -> Option<u64> {
+    use std::os::windows::fs::MetadataExt;
+    entry.metadata().map(|metadata| metadata.last_write_time())
+}
+
+#[cfg(not(any(unix, windows)))]
+fn changed_for(_entry: &DirEntry) -> Option<u64> {
+    None
+}
+
+#[cfg(unix)]
+fn inode_for(entry: &DirEntry) -> Option<u64> {
+    use std::os::unix::fs::MetadataExt;
+    entry.metadata().map(|metadata| metadata.ino())
+}
+
+#[cfg(not(unix))]
+fn inode_for(_entry: &DirEntry) -> Option<u64> {
+    None
+}
+
+fn type_rank_for(entry: &DirEntry) -> Option<u8> {
+    let file_type = entry.file_type()?;
+    let rank = if file_type.is_symlink() {
+        0
+    } else if file_type.is_dir() {
+        1
+    } else if file_type.is_file() {
+        2
+    } else if filesystem::is_block_device(file_type) {
+        3
+    } else if filesystem::is_char_device(file_type) {
+        4
+    } else if filesystem::is_socket(file_type) {
+        5
+    } else if filesystem::is_pipe(file_type) {
+        6
+    } else {
+        7
+    };
+    Some(rank)
+}
+
+fn compare_text_values(
+    left: Option<&OsStr>,
+    right: Option<&OsStr>,
+    options: SortTextOptions,
+) -> Ordering {
+    match (left, right) {
+        (Some(left), Some(right)) => compare_text_bytes(
+            filesystem::osstr_to_bytes(left).as_ref(),
+            filesystem::osstr_to_bytes(right).as_ref(),
+            options,
+        ),
+        (None, Some(_)) => Ordering::Greater,
+        (Some(_), None) => Ordering::Less,
+        (None, None) => Ordering::Equal,
+    }
+}
+
+fn compare_text_bytes(left: &[u8], right: &[u8], options: SortTextOptions) -> Ordering {
+    if options.natural {
+        compare_natural(left, right, options.case_insensitive)
+    } else {
+        compare_lexical(left, right, options.case_insensitive)
+    }
+}
+
+fn compare_lexical(left: &[u8], right: &[u8], case_insensitive: bool) -> Ordering {
+    let mut idx = 0;
+    while idx < left.len() && idx < right.len() {
+        let mut l = left[idx];
+        let mut r = right[idx];
+        if case_insensitive {
+            l = l.to_ascii_lowercase();
+            r = r.to_ascii_lowercase();
+        }
+        match l.cmp(&r) {
+            Ordering::Equal => idx += 1,
+            non_eq => return non_eq,
+        }
+    }
+    left.len().cmp(&right.len())
+}
+
+fn compare_natural(left: &[u8], right: &[u8], case_insensitive: bool) -> Ordering {
+    let mut li = 0usize;
+    let mut ri = 0usize;
+
+    while li < left.len() && ri < right.len() {
+        let ld = left[li].is_ascii_digit();
+        let rd = right[ri].is_ascii_digit();
+
+        if ld && rd {
+            let l_start = li;
+            let r_start = ri;
+
+            while li < left.len() && left[li].is_ascii_digit() {
+                li += 1;
+            }
+            while ri < right.len() && right[ri].is_ascii_digit() {
+                ri += 1;
+            }
+
+            let l_digits = &left[l_start..li];
+            let r_digits = &right[r_start..ri];
+            let ord = compare_digit_chunks(l_digits, r_digits);
+            if ord != Ordering::Equal {
+                return ord;
+            }
+            continue;
+        }
+
+        let mut l = left[li];
+        let mut r = right[ri];
+        if case_insensitive {
+            l = l.to_ascii_lowercase();
+            r = r.to_ascii_lowercase();
+        }
+        match l.cmp(&r) {
+            Ordering::Equal => {
+                li += 1;
+                ri += 1;
+            }
+            non_eq => return non_eq,
+        }
+    }
+
+    left.len().cmp(&right.len())
+}
+
+fn compare_digit_chunks(left: &[u8], right: &[u8]) -> Ordering {
+    let left_trimmed = left.iter().position(|b| *b != b'0').unwrap_or(left.len());
+    let right_trimmed = right.iter().position(|b| *b != b'0').unwrap_or(right.len());
+
+    let left_sig = &left[left_trimmed..];
+    let right_sig = &right[right_trimmed..];
+
+    let left_sig = if left_sig.is_empty() { b"0" } else { left_sig };
+    let right_sig = if right_sig.is_empty() {
+        b"0"
+    } else {
+        right_sig
+    };
+
+    match left_sig.len().cmp(&right_sig.len()) {
+        Ordering::Equal => {}
+        non_eq => return non_eq,
+    }
+
+    match left_sig.cmp(right_sig) {
+        Ordering::Equal => {}
+        non_eq => return non_eq,
+    }
+
+    left.len().cmp(&right.len())
 }
 
 /// State shared by the sender and receiver threads.

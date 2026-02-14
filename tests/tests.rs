@@ -2367,7 +2367,7 @@ fn test_sort_modified() {
         vec!["old", "mid", "new"]
     );
 
-    let output = te.assert_success_and_get_output(".", &["", "--sort", "-m"]);
+    let output = te.assert_success_and_get_output(".", &["", "--sort", "M"]);
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert_eq!(
         stdout.lines().collect::<Vec<_>>(),
@@ -2427,11 +2427,67 @@ fn test_sort_accessed_and_multi_key() {
         vec!["m2_a1", "m1_a2", "m1_a3"]
     );
 
-    let output = te.assert_success_and_get_output(".", &["", "--sort", "m-a"]);
+    let output = te.assert_success_and_get_output(".", &["", "--sort", "mA"]);
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert_eq!(
         stdout.lines().collect::<Vec<_>>(),
         vec!["m1_a3", "m1_a2", "m2_a1"]
+    );
+}
+
+#[test]
+fn test_sort_size() {
+    let te = TestEnv::new(&[], &[]);
+    remove_symlink(te.test_root().join("symlink"));
+
+    create_file_with_size(te.test_root().join("a_big"), 100);
+    create_file_with_size(te.test_root().join("m_mid"), 10);
+    create_file_with_size(te.test_root().join("z_small"), 1);
+
+    let output = te.assert_success_and_get_output(".", &["", "--sort", "s"]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(
+        stdout.lines().collect::<Vec<_>>(),
+        vec!["z_small", "m_mid", "a_big"]
+    );
+
+    let output = te.assert_success_and_get_output(".", &["", "--sort", "S"]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(
+        stdout.lines().collect::<Vec<_>>(),
+        vec!["a_big", "m_mid", "z_small"]
+    );
+}
+
+#[test]
+fn test_sort_basename_collation_options() {
+    let te = TestEnv::new(&[], &[]);
+    remove_symlink(te.test_root().join("symlink"));
+
+    fs::File::create(te.test_root().join("B")).unwrap();
+    fs::File::create(te.test_root().join("a")).unwrap();
+    fs::File::create(te.test_root().join("x10")).unwrap();
+    fs::File::create(te.test_root().join("x2")).unwrap();
+
+    let output = te.assert_success_and_get_output(".", &["", "--sort", "n"]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(
+        stdout.lines().collect::<Vec<_>>(),
+        vec!["B", "a", "x10", "x2"]
+    );
+
+    let output = te.assert_success_and_get_output(".", &["", "--sort", "nz"]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(
+        stdout.lines().collect::<Vec<_>>(),
+        vec!["a", "B", "x10", "x2"]
+    );
+
+    let output = te.assert_success_and_get_output(".", &["", "--sort", "nZ"]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(
+        stdout.lines().collect::<Vec<_>>(),
+        vec!["B", "a", "x2", "x10"]
     );
 }
 
@@ -2657,6 +2713,7 @@ fn test_number_parsing_errors() {
     te.assert_failure(&["--exact-depth=a"]);
 
     te.assert_failure(&["--max-buffer-time=a"]);
+    te.assert_failure(&["--sort=-m"]);
     te.assert_failure(&["--sort=z"]);
     te.assert_failure(&["--sort=m-"]);
 

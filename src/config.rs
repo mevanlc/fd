@@ -72,7 +72,7 @@ pub struct Config {
 
     /// Sort criteria for output results. If this is set, all results are buffered until
     /// traversal finishes, then sorted.
-    pub sort: Option<Vec<SortCriterion>>,
+    pub sort: Option<SortConfig>,
 
     /// `None` if the output should not be colorized. Otherwise, a `LsColors` instance that defines
     /// how to style different filetypes.
@@ -152,13 +152,37 @@ impl Config {
 /// Supported sort keys.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum SortBy {
+    Path,
+    Basename,
+    Extension,
+    Type,
+    Changed,
     Modified,
     Accessed,
+    Born,
+    Inode,
+    Size,
 }
 
-/// A sort key, with optional reverse ordering for that key.
+/// Collation options for text-based sort keys.
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+pub struct SortTextOptions {
+    /// Compare text case-insensitively for p/P, n/N and e/E.
+    pub case_insensitive: bool,
+    /// Use natural-number sorting for p/P, n/N and e/E.
+    pub natural: bool,
+}
+
+/// A sort key, with explicit ordering direction.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct SortCriterion {
     pub by: SortBy,
-    pub reverse: bool,
+    pub descending: bool,
+}
+
+/// Sort expression configuration.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SortConfig {
+    pub criteria: Vec<SortCriterion>,
+    pub text: SortTextOptions,
 }

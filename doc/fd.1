@@ -133,16 +133,34 @@ available. This can be used to see more metadata, to show symlink targets and
 to achieve a deterministic sort order.
 .TP
 .BI "\-R, \-\-sort " sort
-Sort search results by file timestamps. The
-.I sort
-expression is a sequence of keys:
+Sort search results by file metadata. The value is a priority
+sequence of sort fields. Lowercase is ascending, upper is descending.
 .RS
-.IP m
-sort by modified timestamp
-.IP a
-sort by accessed timestamp
+.IP s/S
+size
+.IP m/M
+modified time
+.IP n/N
+basename
+.IP c/C
+changed time
+.IP p/P
+full path
+.IP a/A
+accessed time
+.IP e/E
+extension
+.IP b/B
+born time
+.IP i/I
+inode
+.IP t/T
+type (dir, file, ...)
+.IP z
+case-insensitive collation
+.IP Z
+natural number collation
 .RE
-Each key can be prefixed with '-' to reverse the order for that key.
 When combined with
 .BR \-\-list\-details ,
 this forces fd's internal long-listing implementation.
