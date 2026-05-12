@@ -1,3 +1,4 @@
+mod bash_cond;
 mod cli;
 mod config;
 mod dir_entry;
@@ -85,27 +86,68 @@ fn run() -> Result<ExitCode> {
         bail!("No valid search paths given.");
     }
 
-    ensure_search_pattern_is_not_a_path(&opts)?;
+    if !opts.bash {
+        ensure_search_pattern_is_not_a_path(&opts)?;
+    }
     let pattern = &opts.pattern;
     let exprs = &opts.exprs;
     let empty = Vec::new();
 
-    let pattern_regexps = exprs
+    let pattern_exprs = exprs
         .as_ref()
         .unwrap_or(&empty)
         .iter()
         .chain([pattern])
-        .map(|pat| build_pattern_regex(pat, &opts))
-        .collect::<Result<Vec<String>>>()?;
+        .filter(|pat| !pat.is_empty())
+        .cloned()
+        .collect::<Vec<_>>();
 
-    let config = construct_config(opts, &pattern_regexps)?;
+    let bash_patterns = if opts.bash {
+        pattern_exprs
+            .iter()
+            .map(|expr| bash_cond::parse_expr(expr, "--bash"))
+            .collect::<Result<Vec<_>>>()?
+    } else {
+        Vec::new()
+    };
 
-    ensure_use_hidden_option_for_leading_dot_pattern(&config, &pattern_regexps)?;
+    let prune_if = opts
+        .prune_if
+        .as_deref()
+        .map(|expr| bash_cond::parse_expr(expr, "--prune-if"))
+        .transpose()?;
+    let exclude_if = opts
+        .exclude_if
+        .as_deref()
+        .map(|expr| bash_cond::parse_expr(expr, "--exclude-if"))
+        .transpose()?;
 
-    let regexps = pattern_regexps
-        .into_iter()
-        .map(|pat| build_regex(pat, &config))
-        .collect::<Result<Vec<Regex>>>()?;
+    let pattern_regexps = if opts.bash {
+        pattern_exprs
+    } else {
+        exprs
+            .as_ref()
+            .unwrap_or(&empty)
+            .iter()
+            .chain([pattern])
+            .map(|pat| build_pattern_regex(pat, &opts))
+            .collect::<Result<Vec<String>>>()?
+    };
+
+    let config = construct_config(opts, &pattern_regexps, bash_patterns, prune_if, exclude_if)?;
+
+    if !config.uses_bash_patterns() {
+        ensure_use_hidden_option_for_leading_dot_pattern(&config, &pattern_regexps)?;
+    }
+
+    let regexps = if config.uses_bash_patterns() {
+        Vec::new()
+    } else {
+        pattern_regexps
+            .into_iter()
+            .map(|pat| build_regex(pat, &config))
+            .collect::<Result<Vec<Regex>>>()?
+    };
 
     walk::scan(&search_paths, regexps, config)
 }
@@ -192,7 +234,13 @@ fn check_path_separator_length(path_separator: Option<&str>) -> Result<()> {
     }
 }
 
-fn construct_config(mut opts: Opts, pattern_regexps: &[String]) -> Result<Config> {
+fn construct_config(
+    mut opts: Opts,
+    pattern_regexps: &[String],
+    bash_patterns: Vec<bash_condexp::Expr>,
+    prune_if: Option<bash_condexp::Expr>,
+    exclude_if: Option<bash_condexp::Expr>,
+) -> Result<Config> {
     // The search will be case-sensitive if the command line flag is set or
     // if any of the patterns has an uppercase character (smart case).
     let case_sensitive = !opts.ignore_case
@@ -264,6 +312,9 @@ fn construct_config(mut opts: Opts, pattern_regexps: &[String]) -> Result<Config
         max_depth: opts.max_depth(),
         min_depth: opts.min_depth(),
         prune: opts.prune,
+        bash_patterns,
+        prune_if,
+        exclude_if,
         threads: opts.threads().get(),
         max_buffer_time: opts.max_buffer_time,
         sort,

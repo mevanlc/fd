@@ -3,7 +3,7 @@ use std::cmp::Ordering;
 use std::ffi::OsStr;
 use std::io::{self, Write};
 use std::mem;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::thread;
@@ -16,6 +16,7 @@ use ignore::overrides::{Override, OverrideBuilder};
 use ignore::{WalkBuilder, WalkParallel, WalkState};
 use regex::bytes::Regex;
 
+use crate::bash_cond;
 use crate::config::Config;
 use crate::config::{SortBy, SortConfig, SortTextOptions};
 use crate::dir_entry::DirEntry;
@@ -369,6 +370,14 @@ fn compare_entries_by(
 
 fn basename_or_path(path: &std::path::Path) -> Option<&OsStr> {
     path.file_name().or(Some(path.as_os_str()))
+}
+
+fn entry_context_dir(path: &Path, is_dir: bool) -> &Path {
+    if is_dir {
+        path
+    } else {
+        path.parent().unwrap_or_else(|| Path::new("."))
+    }
 }
 
 fn compare_optional<T: Ord>(left: Option<T>, right: Option<T>) -> Ordering {
@@ -776,14 +785,44 @@ impl WorkerState {
                     }
                 };
 
+                // Check the name first, since it doesn't require metadata
+                let entry_path = entry.path();
+                let is_dir = entry.file_type().is_some_and(|ft| ft.is_dir());
+                let context_dir = entry_context_dir(entry_path, is_dir);
+
+                if let Some(expr) = &config.exclude_if {
+                    match bash_cond::evaluate(expr, entry_path, context_dir, config) {
+                        Ok(true) if is_dir => return WalkState::Skip,
+                        Ok(true) => return WalkState::Continue,
+                        Ok(false) => {}
+                        Err(err) => {
+                            print_error(format!("{err:#}"));
+                            return WalkState::Quit;
+                        }
+                    }
+                }
+
+                let prune_if_matched = if is_dir {
+                    if let Some(expr) = &config.prune_if {
+                        match bash_cond::evaluate(expr, entry_path, context_dir, config) {
+                            Ok(result) => result,
+                            Err(err) => {
+                                print_error(format!("{err:#}"));
+                                return WalkState::Quit;
+                            }
+                        }
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                };
+
                 if let Some(min_depth) = config.min_depth
                     && entry.depth().is_none_or(|d| d < min_depth)
                 {
                     return WalkState::Continue;
                 }
-
-                // Check the name first, since it doesn't require metadata
-                let entry_path = entry.path();
 
                 let search_str: Cow<OsStr> = if config.search_full_path {
                     let path_abs_buf = filesystem::path_absolute_form(entry_path)
@@ -805,6 +844,17 @@ impl WorkerState {
                     .all(|pat| pat.is_match(&filesystem::osstr_to_bytes(search_str.as_ref())))
                 {
                     return WalkState::Continue;
+                }
+
+                for expr in &config.bash_patterns {
+                    match bash_cond::evaluate(expr, entry_path, context_dir, config) {
+                        Ok(true) => {}
+                        Ok(false) => return WalkState::Continue,
+                        Err(err) => {
+                            print_error(format!("{err:#}"));
+                            return WalkState::Quit;
+                        }
+                    }
                 }
 
                 // Filter out unwanted extensions.
@@ -888,7 +938,7 @@ impl WorkerState {
                 }
 
                 // Apply pruning.
-                if config.prune {
+                if config.prune || prune_if_matched {
                     return WalkState::Skip;
                 }
 

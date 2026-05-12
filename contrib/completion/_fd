@@ -68,9 +68,10 @@ _fd() {
     + '(regex-pattern)' # regex-based search pattern
     '(no-regex-pattern)--regex[perform a regex-based search (default)]'
 
-    + '(no-regex-pattern)' # non-regex-based search pattern
-    {-g,--glob}'[perform a glob-based search]'
-    {-F,--fixed-strings}'[treat pattern as literal string instead of a regex]'
+	+ '(no-regex-pattern)' # non-regex-based search pattern
+	{-g,--glob}'[perform a glob-based search]'
+	{-F,--fixed-strings}'[treat pattern as literal string instead of a regex]'
+	'--bash[perform a bash conditional expression search]'
 
     + '(no-require-git)'
     "$no(no-ignore-full --no-ignore-vcs --no-require-git)--no-require-git[don't require git repo to respect gitignores]"
@@ -111,8 +112,10 @@ _fd() {
     '(--exact-depth --min-depth)--min-depth=[set directory depth to descend before start searching]:depth'
     '(--exact-depth -d --max-depth --maxdepth --min-depth)--exact-depth=[only search at the exact given directory depth]:depth'
 
-    + prune # pruning
-    "--prune[don't traverse into matching directories]"
+	+ prune # pruning
+	"--prune[don't traverse into matching directories]"
+	"--prune-if=[don't traverse into directories that satisfy the bash conditional expression]:conditional expression"
+	"--exclude-if=[exclude entries that satisfy the bash conditional expression]:conditional expression"
 
     + filter-misc # filter search
     '*'{-t+,--type=}"[filter search by type]:type:(($fd_types))"
@@ -169,8 +172,8 @@ _fd() {
     + strip-cwd-prefix
     $no'(strip-cwd-prefix exec-cmds)--strip-cwd-prefix=-[When to strip ./]::when:(always never auto)'
 
-    + and
-    '--and=[additional required search path]:pattern'
+	+ and
+	'--and=[additional required search pattern]:pattern'
 
 
     + args # positional arguments

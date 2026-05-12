@@ -1180,6 +1180,91 @@ fn test_prune() {
     );
 }
 
+/// Bash conditional expression search (--bash)
+#[test]
+fn test_bash_search() {
+    let te = TestEnv::new(DEFAULT_DIRS, DEFAULT_FILES);
+
+    te.assert_output(&["--bash", "${/} == c.foo"], "one/two/c.foo");
+    te.assert_output(
+        &["--bash", "${/} == *.foo", "--and", "${} =~ ^one/"],
+        "one/b.foo
+        one/two/c.foo
+        one/two/three/d.foo",
+    );
+}
+
+/// Conditional pruning (--prune-if)
+#[test]
+fn test_prune_if() {
+    let dirs = &["foo/bar", "bar/foo", "baz"];
+    let files = &[
+        "foo/foo.file",
+        "foo/bar/foo.file",
+        "bar/foo.file",
+        "bar/foo/foo.file",
+        "baz/foo.file",
+    ];
+
+    let te = TestEnv::new(dirs, files);
+
+    te.assert_output(
+        &["--prune-if", "${/} == foo", "foo"],
+        "foo/
+        bar/foo/
+        bar/foo.file
+        baz/foo.file",
+    );
+}
+
+/// Conditional exclusions (--exclude-if)
+#[test]
+fn test_exclude_if() {
+    let dirs = &["foo/bar", "bar/foo", "baz"];
+    let files = &[
+        "foo/foo.file",
+        "foo/bar/foo.file",
+        "bar/foo.file",
+        "bar/foo/foo.file",
+        "baz/foo.file",
+    ];
+
+    let te = TestEnv::new(dirs, files);
+
+    te.assert_output(
+        &["--exclude-if", "${/} == foo", "foo"],
+        "bar/foo.file
+        baz/foo.file",
+    );
+}
+
+#[test]
+fn test_exclude_if_file_parent_context() {
+    let dirs = &["skip", "keep"];
+    let files = &["skip/a.txt", "skip/other.log", "keep/a.txt"];
+    let te = TestEnv::new(dirs, files);
+    fs::File::create(te.test_root().join("skip/.exclude-files")).unwrap();
+
+    te.assert_output(
+        &[
+            "--exclude-if",
+            "-e .exclude-files && ${/} == a.txt",
+            "a.txt",
+        ],
+        "keep/a.txt",
+    );
+}
+
+#[test]
+fn test_bash_search_parse_error() {
+    let te = TestEnv::new(DEFAULT_DIRS, DEFAULT_FILES);
+
+    te.assert_failure_with_error(
+        &["--bash", "[["],
+        "[fd error]: Invalid --bash conditional expression: unexpected end of input",
+    );
+}
+
 /// Absolute paths (--absolute-path)
 #[test]
 fn test_absolute_path() {

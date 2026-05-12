@@ -175,10 +175,24 @@ pub struct Opts {
         short = 'F',
         alias = "literal",
         hide_short_help = true,
-        help = "Treat pattern as literal string stead of regex",
+        help = "Treat pattern as literal string instead of regex",
         long_help
     )]
     pub fixed_strings: bool,
+
+    /// Treat the search pattern as a bash conditional expression.
+    ///
+    /// The expression is parsed and evaluated by bash-condexp. It can use the
+    /// fd placeholder variables `${}` (path), `${/}` (basename), `${//}`
+    /// (parent), `${.}` (path without extension), and `${/.}` (basename without
+    /// extension).
+    #[arg(
+        long,
+        conflicts_with_all(&["glob", "regex", "fixed_strings"]),
+        help = "Bash conditional expression search",
+        long_help
+    )]
+    pub bash: bool,
 
     /// Add additional required search patterns, all of which must be matched. Multiple
     /// additional patterns can be specified. The patterns are regular
@@ -333,6 +347,32 @@ pub struct Opts {
         long_help,
         )]
     pub prune: bool,
+
+    /// Do not traverse into directories that satisfy the bash conditional expression.
+    ///
+    /// The expression is evaluated in the context of each encountered directory.
+    #[arg(
+        long,
+        value_name = "condexp",
+        hide_short_help = true,
+        allow_hyphen_values = true,
+        long_help
+    )]
+    pub prune_if: Option<String>,
+
+    /// Exclude entries that satisfy the bash conditional expression.
+    ///
+    /// For files, the expression is evaluated in the context of the file's
+    /// parent directory. For directories, the expression is evaluated in the
+    /// context of that directory.
+    #[arg(
+        long,
+        value_name = "condexp",
+        hide_short_help = true,
+        allow_hyphen_values = true,
+        long_help
+    )]
+    pub exclude_if: Option<String>,
 
     /// Filter the search by type:
     /// {n}  'f' or 'file':         regular files

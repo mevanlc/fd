@@ -3,6 +3,8 @@ use std::{path::PathBuf, sync::Arc, time::Duration};
 use lscolors::LsColors;
 use regex::bytes::RegexSet;
 
+use bash_condexp::Expr;
+
 use crate::exec::CommandSet;
 use crate::filetypes::FileTypes;
 #[cfg(unix)]
@@ -57,6 +59,15 @@ pub struct Config {
 
     /// Whether to stop traversing into matching directories.
     pub prune: bool,
+
+    /// Bash conditional expressions that all entries must satisfy.
+    pub bash_patterns: Vec<Expr>,
+
+    /// Bash conditional expression that skips descendants of matching directories.
+    pub prune_if: Option<Expr>,
+
+    /// Bash conditional expression that excludes matching entries.
+    pub exclude_if: Option<Expr>,
 
     /// The number of threads to use.
     pub threads: usize,
@@ -146,6 +157,10 @@ impl Config {
     /// Check whether results are being printed.
     pub fn is_printing(&self) -> bool {
         self.command.is_none()
+    }
+
+    pub fn uses_bash_patterns(&self) -> bool {
+        !self.bash_patterns.is_empty()
     }
 }
 
