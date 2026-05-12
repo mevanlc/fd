@@ -196,14 +196,15 @@ fd -g 'test_*.py' -X vim
 Note that we use capital `-X` here to open a single `vim` instance. If there are two such files,
 `test_basic.py` and `lib/test_advanced.py`, this will run `vim test_basic.py lib/test_advanced.py`.
 
-To see details like file permissions, owners, file sizes etc., you can tell `fd` to show them
-by running `ls` for each result:
+To see details like file permissions, owners, file sizes etc., you can use the
+`-l`/`--list-details` option for long-listing output:
+``` bash
+fd … -l
+```
+To use the system 'ls' instead, use `-x`/`--exec` or `-X`/`--exec-batch`, for example:
 ``` bash
 fd … -X ls -lhd --color=always
 ```
-This pattern is so useful that `fd` provides a shortcut. You can use the `-l`/`--list-details`
-option for this long-listing output (`ls`-backed on Unix, native fallback on Windows): `fd … -l`.
-If you combine this with `-R`/`--sort`, fd will force the internal long-listing implementation.
 
 The `-X` option is also useful when combining `fd` with [ripgrep](https://github.com/BurntSushi/ripgrep/) (`rg`) in order to search within a certain class of files, like all C++ source files:
 ```bash
@@ -325,7 +326,7 @@ Options:
   -i, --ignore-case                Case-insensitive search (default: smart case)
   -g, --glob                       Glob-based search (default: regular expression)
   -a, --absolute-path              Show absolute instead of relative paths
-  -l, --list-details               Use a long listing format with file metadata
+  -l, --list-details               Use a long listing format with metadata, similar to ls -l
   -R, --sort <mMsS...>             Sort by time or size. Uppercase reverses sort. See --help for more.
   -L, --follow                     Follow symbolic links
   -p, --full-path                  Search full abs. path (default: filename only)

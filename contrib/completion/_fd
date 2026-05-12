@@ -88,7 +88,7 @@ _fd() {
     '(long-listing)'{-0,--print0}'[separate search results by the null character]'
 
     + '(long-listing)' # long-listing output
-    '(abs-path null-sep max-results exec-cmds)'{-l,--list-details}'[use a long listing format with file metadata]'
+    '(abs-path null-sep max-results exec-cmds)'{-l,--list-details}'[use a long listing format with metadata, similar to ls -l]'
 
     + '(sort-order)' # result sorting
     '(long-listing exec-cmds)'{-R+,--sort=}'[sort by time or size; uppercase reverses; see --help]:sort expression'

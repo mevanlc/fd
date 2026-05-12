@@ -207,16 +207,14 @@ pub struct Opts {
     #[arg(long, overrides_with = "absolute_path", hide = true, action = ArgAction::SetTrue)]
     relative_path: (),
 
-    /// Use a detailed listing format similar to 'ls -l'. On Unix platforms,
-    /// this is implemented via '--exec-batch ls -l' with additional options.
-    /// On Windows, fd falls back to a native implementation if GNU 'ls' is
-    /// unavailable. This can be used to see more metadata, to show symlink
-    /// targets and to achieve a deterministic sort order.
+    /// Use a long listing format with metadata, similar to 'ls -l'.
+    ///
+    /// To use the system 'ls' instead, see -x and -X.
     #[arg(
         long,
         short = 'l',
         conflicts_with("absolute_path"),
-        help = "Use a long listing format with file metadata",
+        help = "Use a long listing format with metadata, similar to ls -l",
         long_help
     )]
     pub list_details: bool,
@@ -231,7 +229,6 @@ pub struct Opts {
     ///   t/T  type (dir, file, ...)      i/I  inode
     ///     z  case-insensitive collation   Z  natural number collation
     ///
-    /// With '--list-details': forces fd's internal long-listing implementation.
     #[arg(
         long,
         short = 'R',

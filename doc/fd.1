@@ -126,11 +126,8 @@ Shows the full path starting from the root as opposed to relative paths.
 The flag can be overridden with '--relative-path'.
 .TP
 .B \-l, \-\-list\-details
-Use a detailed listing format similar to 'ls -l'. On Unix platforms, this is
-implemented via '--exec-batch ls -l' with some additional 'ls' options.
-On Windows, fd falls back to a native implementation if GNU 'ls' is not
-available. This can be used to see more metadata, to show symlink targets and
-to achieve a deterministic sort order.
+Use a long listing format with metadata, similar to 'ls -l'.
+To use the system 'ls' instead, see \-x and \-X.
 .TP
 .BI "\-R, \-\-sort " sort
 Sort search results by file metadata. The value is a priority
@@ -161,9 +158,6 @@ case-insensitive collation
 .IP Z
 natural number collation
 .RE
-When combined with
-.BR \-\-list\-details ,
-this forces fd's internal long-listing implementation.
 .TP
 .B \-L, \-\-follow
 By default, fd does not descend into symlinked directories. Using this flag, symbolic links are

@@ -2689,6 +2689,28 @@ fn test_list_details() {
     te.assert_failure(&["--sort", "m", "--exec", "echo"]);
 }
 
+#[cfg(unix)]
+#[test]
+fn test_list_details_does_not_require_system_ls() {
+    let te = TestEnv::new(DEFAULT_DIRS, DEFAULT_FILES);
+
+    let output = std::process::Command::new(te.test_exe())
+        .current_dir(te.test_root())
+        .env("LS_COLORS", "")
+        .env("PATH", "")
+        .arg("--no-global-ignore-file")
+        .arg("--list-details")
+        .output()
+        .expect("fd output");
+
+    assert!(
+        output.status.success(),
+        "`fd --list-details` failed without PATH\nstdout:\n---\n{}---\nstderr:\n---\n{}---",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+}
+
 #[test]
 fn test_single_and_multithreaded_execution() {
     let te = TestEnv::new(DEFAULT_DIRS, DEFAULT_FILES);

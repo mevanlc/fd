@@ -242,7 +242,7 @@ fn construct_config(mut opts: Opts, pattern_regexps: &[String]) -> Result<Config
         HyperlinkWhen::Never => false,
         HyperlinkWhen::Auto => colored_output,
     };
-    let command = extract_command(&mut opts, colored_output)?;
+    let command = extract_command(&mut opts);
     let has_command = command.is_some() || opts.list_details;
     let sort = opts.sort.as_ref().map(|expr| expr.0.clone());
 
@@ -333,125 +333,8 @@ fn construct_config(mut opts: Opts, pattern_regexps: &[String]) -> Result<Config
     })
 }
 
-fn extract_command(opts: &mut Opts, colored_output: bool) -> Result<Option<CommandSet>> {
-    if let Some(command) = opts.exec.command.take() {
-        return Ok(Some(command));
-    }
-
-    if !opts.list_details {
-        return Ok(None);
-    }
-
-    if opts.sort.is_some() {
-        // Sorting with --list-details requires fd-controlled ordering, so use the
-        // internal long-listing implementation instead of shelling out to `ls`.
-        return Ok(None);
-    }
-
-    #[cfg(windows)]
-    if !gnu_ls_available() {
-        // Fall back to fd's native --list-details output on Windows.
-        return Ok(None);
-    }
-
-    let cmd = determine_ls_command(colored_output)?;
-    Ok(Some(CommandSet::new_batch([cmd]).unwrap()))
-}
-
-#[cfg(windows)]
-fn gnu_ls_available() -> bool {
-    use std::process::{Command, Stdio};
-
-    Command::new("ls")
-        .arg("--version")
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .is_ok()
-}
-
-fn determine_ls_command(colored_output: bool) -> Result<Vec<&'static str>> {
-    #[allow(unused)]
-    let gnu_ls = |command_name| {
-        let color_arg = if colored_output {
-            "--color=always"
-        } else {
-            "--color=never"
-        };
-        // Note: we use short options here (instead of --long-options) to support more
-        // platforms (like BusyBox).
-        vec![
-            command_name,
-            "-l", // long listing format
-            "-h", // human readable file sizes
-            "-d", // list directories themselves, not their contents
-            color_arg,
-        ]
-    };
-    let cmd: Vec<&str> = if cfg!(unix) {
-        if !cfg!(any(
-            target_os = "macos",
-            target_os = "dragonfly",
-            target_os = "freebsd",
-            target_os = "netbsd",
-            target_os = "openbsd"
-        )) {
-            // Assume ls is GNU ls
-            gnu_ls("ls")
-        } else {
-            // MacOS, DragonFlyBSD, FreeBSD
-            use std::process::{Command, Stdio};
-
-            // Use GNU ls, if available (support for --color=auto, better LS_COLORS support)
-            let gnu_ls_exists = Command::new("gls")
-                .arg("--version")
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status()
-                .is_ok();
-
-            if gnu_ls_exists {
-                gnu_ls("gls")
-            } else {
-                let mut cmd = vec![
-                    "ls", // BSD version of ls
-                    "-l", // long listing format
-                    "-h", // '--human-readable' is not available, '-h' is
-                    "-d", // '--directory' is not available, but '-d' is
-                ];
-
-                if !cfg!(any(target_os = "netbsd", target_os = "openbsd")) && colored_output {
-                    // -G is not available in NetBSD's and OpenBSD's ls
-                    cmd.push("-G");
-                }
-
-                cmd
-            }
-        }
-    } else if cfg!(windows) {
-        use std::process::{Command, Stdio};
-
-        // Use GNU ls, if available
-        let gnu_ls_exists = Command::new("ls")
-            .arg("--version")
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .is_ok();
-
-        if gnu_ls_exists {
-            gnu_ls("ls")
-        } else {
-            return Err(anyhow!(
-                "'fd --list-details' is not supported on Windows unless GNU 'ls' is installed."
-            ));
-        }
-    } else {
-        return Err(anyhow!(
-            "'fd --list-details' is not supported on this platform."
-        ));
-    };
-    Ok(cmd)
+fn extract_command(opts: &mut Opts) -> Option<CommandSet> {
+    opts.exec.command.take()
 }
 
 fn extract_time_constraints(opts: &Opts) -> Result<Vec<TimeFilter>> {
