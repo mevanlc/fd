@@ -1194,6 +1194,13 @@ fn test_bash_search() {
     );
 }
 
+#[test]
+fn test_bash_search_empty_path_file_test() {
+    let te = TestEnv::new(DEFAULT_DIRS, DEFAULT_FILES);
+
+    te.assert_output(&["--bash", "-e ''"], "");
+}
+
 /// Conditional pruning (--prune-if)
 #[test]
 fn test_prune_if() {
