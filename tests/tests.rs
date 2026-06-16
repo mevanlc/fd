@@ -10,7 +10,7 @@ use test_case::test_case;
 
 use jiff::Timestamp;
 use normpath::PathExt;
-use regex::escape;
+use regex::{Regex, escape};
 
 use crate::testenv::TestEnv;
 
@@ -2779,6 +2779,34 @@ fn test_list_details() {
     te.assert_success_and_get_output(".", &["--list-details"]);
     te.assert_success_and_get_output(".", &["--list-details", "--sort", "m"]);
     te.assert_failure(&["--sort", "m", "--exec", "echo"]);
+}
+
+#[test]
+fn test_list_details_formats_modified_time_like_ls() {
+    let te = TestEnv::new(&[], &[]);
+    remove_symlink(te.test_root().join("symlink"));
+    create_file_with_modified(te.test_root().join("recent"), 0);
+    fs::File::create(te.test_root().join("old")).expect("create old file");
+    change_file_modified(te.test_root().join("old"), "2018-03-15T12:00:00Z");
+
+    let output = te.assert_success_and_get_output(".", &["", "--list-details"]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let recent_re =
+        Regex::new(r"(?m)\s[A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}\s+\.[/\\]recent$").unwrap();
+    let old_re = Regex::new(r"(?m)\s[A-Z][a-z]{2}\s+\d{1,2}\s+2018\s+\.[/\\]old$").unwrap();
+
+    assert!(
+        recent_re.is_match(&stdout),
+        "recent timestamp did not use ls-style HH:MM format:\n{stdout}"
+    );
+    assert!(
+        old_re.is_match(&stdout),
+        "old timestamp did not use ls-style year format:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains("1521115200"),
+        "old timestamp should not be printed as epoch seconds:\n{stdout}"
+    );
 }
 
 #[cfg(unix)]

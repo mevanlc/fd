@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::fs::Metadata;
 use std::io::{self, Write};
-use std::time::UNIX_EPOCH;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[cfg(unix)]
 use nix::unistd::{Gid, Group, Uid, User};
@@ -12,11 +12,19 @@ use std::os::windows::fs::MetadataExt;
 
 use lscolors::{Indicator, LsColors, Style};
 
+use jiff::Zoned;
+use jiff::fmt::StdIoWrite;
+use jiff::fmt::strtime::{BrokenDownTime, Config as TimeFormatConfig};
+
 use crate::config::Config;
 use crate::dir_entry::DirEntry;
 use crate::filesystem;
 use crate::fmt::FormatTemplate;
 use crate::hyperlink::PathUrl;
+
+const SECS_PER_AVERAGE_GREGORIAN_YEAR: u64 = 31_556_952;
+const RECENT_TIME_FORMAT: &str = "%b %e %H:%M";
+const OLDER_TIME_FORMAT: &str = "%b %e  %Y";
 
 fn replace_path_separator(path: &str, new_path_separator: &str) -> String {
     path.replace(std::path::MAIN_SEPARATOR, new_path_separator)
@@ -208,9 +216,40 @@ fn format_modified_timestamp(metadata: &Metadata) -> String {
     metadata
         .modified()
         .ok()
-        .and_then(|ts| ts.duration_since(UNIX_EPOCH).ok())
-        .map(|d| d.as_secs().to_string())
+        .map(format_list_details_timestamp)
         .unwrap_or_else(|| "-".to_string())
+}
+
+fn format_list_details_timestamp(time: SystemTime) -> String {
+    format_list_details_timestamp_with_now(time, SystemTime::now())
+}
+
+fn format_list_details_timestamp_with_now(time: SystemTime, now: SystemTime) -> String {
+    let recent_start = now - Duration::from_secs(SECS_PER_AVERAGE_GREGORIAN_YEAR / 2);
+    let fmt = if (recent_start..=now).contains(&time) {
+        RECENT_TIME_FORMAT
+    } else {
+        OLDER_TIME_FORMAT
+    };
+
+    format_system_time(time, fmt).unwrap_or_else(|| format_epoch_seconds(time))
+}
+
+fn format_system_time(time: SystemTime, fmt: &str) -> Option<String> {
+    let zoned = Zoned::try_from(time).ok()?;
+    let time = BrokenDownTime::from(&zoned);
+    let mut out = Vec::new();
+    let mut writer = StdIoWrite(&mut out);
+    let config = TimeFormatConfig::new().lenient(true);
+    time.format_with_config(&config, fmt, &mut writer).ok()?;
+    String::from_utf8(out).ok()
+}
+
+fn format_epoch_seconds(time: SystemTime) -> String {
+    match time.duration_since(UNIX_EPOCH) {
+        Ok(duration) => duration.as_secs().to_string(),
+        Err(error) => format!("-{}", error.duration().as_secs()),
+    }
 }
 
 fn format_human_size(size: u64) -> String {
@@ -363,5 +402,53 @@ fn print_entry_uncolorized<W: Write>(
         // Print path as raw bytes, allowing invalid UTF-8 filenames to be passed to other processes
         stdout.write_all(entry.stripped_path(config).as_os_str().as_bytes())?;
         print_trailing_slash(stdout, entry, config, None)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn list_details_timestamp_uses_recent_format_for_recent_times() {
+        let now = UNIX_EPOCH + Duration::from_secs(1_700_000_000);
+        let recent = now - Duration::from_secs(60);
+
+        let formatted = format_list_details_timestamp_with_now(recent, now);
+
+        assert!(
+            formatted.contains(':'),
+            "recent timestamp should include HH:MM: {formatted}"
+        );
+        assert!(
+            !formatted.contains("2023"),
+            "recent timestamp should not include the year: {formatted}"
+        );
+    }
+
+    #[test]
+    fn list_details_timestamp_uses_older_format_for_old_and_future_times() {
+        let now = UNIX_EPOCH + Duration::from_secs(1_700_000_000);
+        let old = now - Duration::from_secs(SECS_PER_AVERAGE_GREGORIAN_YEAR);
+        let future = now + Duration::from_secs(60);
+
+        for timestamp in [old, future] {
+            let formatted = format_list_details_timestamp_with_now(timestamp, now);
+
+            assert!(
+                !formatted.contains(':'),
+                "older/future timestamp should not include HH:MM: {formatted}"
+            );
+        }
+    }
+
+    #[test]
+    fn list_details_timestamp_falls_back_to_epoch_seconds() {
+        let out_of_range = UNIX_EPOCH + Duration::from_secs(253_402_300_800);
+
+        assert_eq!(
+            "253402300800",
+            format_list_details_timestamp_with_now(out_of_range, UNIX_EPOCH)
+        );
     }
 }
