@@ -374,6 +374,38 @@ pub struct Opts {
     )]
     pub exclude_if: Option<String>,
 
+    /// Include entries that match any of the named match sets.
+    #[arg(
+        long = "match",
+        short = 'm',
+        value_name = "set[,set...]",
+        value_delimiter = ',',
+        value_parser = parse_match_set_name,
+        help = "Include entries matching named match set(s)",
+        long_help
+    )]
+    pub match_sets: Vec<String>,
+
+    /// Exclude entries that match any of the named match sets.
+    #[arg(
+        long = "exclude-match",
+        short = 'M',
+        value_name = "set[,set...]",
+        value_delimiter = ',',
+        value_parser = parse_match_set_name,
+        help = "Exclude entries matching named match set(s)",
+        long_help
+    )]
+    pub exclude_match_sets: Vec<String>,
+
+    /// Load match sets from ~/.config/fd/match-sets.kdl.
+    #[arg(long = "match-sets", overrides_with = "no_match_sets")]
+    pub load_match_sets: bool,
+
+    /// Do not load match sets from ~/.config/fd/match-sets.kdl.
+    #[arg(long = "no-match-sets", overrides_with = "load_match_sets")]
+    pub no_match_sets: bool,
+
     /// Filter the search by type:
     /// {n}  'f' or 'file':         regular files
     /// {n}  'd' or 'dir' or 'directory':    directories
@@ -1041,6 +1073,15 @@ fn parse_sort(arg: &str) -> Result<SortExpression, String> {
     }
 
     Ok(SortExpression(SortConfig { criteria, text }))
+}
+
+fn parse_match_set_name(arg: &str) -> Result<String, String> {
+    let name = arg.trim();
+    if name.is_empty() {
+        Err("match set names must not be empty".to_string())
+    } else {
+        Ok(name.to_string())
+    }
 }
 
 fn ensure_current_directory_exists(current_directory: &Path) -> anyhow::Result<()> {

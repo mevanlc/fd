@@ -1,0 +1,37 @@
+// Original pattern-set sketch, adapted to valid match-set KDL fixture syntax.
+
+"vcs" {
+    dir name literal full {
+        ".git"
+        ".svn"
+        ".hg"
+        ".bzr"
+    }
+}
+
+"outputs" {
+    dir bash {
+        "${/} == target && -f CACHEDIR.TAG"
+        "${/} == build && -f ../build.gradle.kts"
+    }
+}
+
+"cache" {
+    dir name literal full {
+        "__pycache__"
+        ".cache"
+    }
+}
+
+"packages" {
+    dir name literal full {
+        "node_modules"
+        "__pypackages__"
+    }
+}
+
+"noise" {
+    file name literal full {
+        ".DS_Store"
+    }
+}

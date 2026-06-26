@@ -1263,6 +1263,71 @@ fn test_exclude_if_file_parent_context() {
 }
 
 #[test]
+fn test_match_sets_include_entries() {
+    let te = TestEnv::new(
+        &["node_modules", ".venv", "src"],
+        &[
+            "node_modules/package.json",
+            ".venv/pyvenv.cfg",
+            ".DS_Store",
+            "src/main.rs",
+        ],
+    )
+    .match_sets_file(include_str!("fixtures/match_sets/f-exclusions.kdl"));
+
+    te.assert_output(
+        &["--hidden", "--no-ignore", "--match", "metadata", "."],
+        ".DS_Store
+        .venv/
+        node_modules/",
+    );
+}
+
+#[test]
+fn test_match_sets_exclude_entries_and_prune_dirs() {
+    let te = TestEnv::new(
+        &["node_modules", ".venv", "src"],
+        &[
+            "node_modules/package.json",
+            ".venv/pyvenv.cfg",
+            ".DS_Store",
+            "src/main.rs",
+        ],
+    )
+    .match_sets_file(include_str!("fixtures/match_sets/f-exclusions.kdl"));
+
+    te.assert_output(
+        &["--hidden", "--exclude-match", "metadata", "main"],
+        "src/main.rs",
+    );
+    te.assert_output(&["--hidden", "-M", "metadata", "package"], "");
+}
+
+#[test]
+fn test_match_sets_include_is_or_across_sets() {
+    let te = TestEnv::new(&["node_modules", "src"], &[".DS_Store", "src/main.rs"])
+        .match_sets_file(include_str!("fixtures/match_sets/f-exclusions.kdl"));
+
+    te.assert_output(
+        &["--hidden", "--no-ignore", "-m", "metadata,vcs", "."],
+        ".DS_Store
+        .git/
+        node_modules/",
+    );
+}
+
+#[test]
+fn test_match_sets_no_match_sets_blocks_requested_sets() {
+    let te = TestEnv::new(&["node_modules"], &["node_modules/package.json"])
+        .match_sets_file(include_str!("fixtures/match_sets/f-exclusions.kdl"));
+
+    te.assert_failure_with_error(
+        &["--no-match-sets", "-m", "metadata", "."],
+        "[fd error]: match sets were requested, but --no-match-sets disabled match-set loading",
+    );
+}
+
+#[test]
 fn test_bash_search_parse_error() {
     let te = TestEnv::new(DEFAULT_DIRS, DEFAULT_FILES);
 

@@ -824,6 +824,38 @@ impl WorkerState {
                     return WalkState::Continue;
                 }
 
+                if !config.include_match_sets.is_empty() {
+                    let mut matched = false;
+                    for set in &config.include_match_sets {
+                        match set.matches(&entry, context_dir, config) {
+                            Ok(true) => {
+                                matched = true;
+                                break;
+                            }
+                            Ok(false) => {}
+                            Err(err) => {
+                                print_error(format!("{err:#}"));
+                                return WalkState::Quit;
+                            }
+                        }
+                    }
+                    if !matched {
+                        return WalkState::Continue;
+                    }
+                }
+
+                for set in &config.exclude_match_sets {
+                    match set.matches(&entry, context_dir, config) {
+                        Ok(true) if is_dir => return WalkState::Skip,
+                        Ok(true) => return WalkState::Continue,
+                        Ok(false) => {}
+                        Err(err) => {
+                            print_error(format!("{err:#}"));
+                            return WalkState::Quit;
+                        }
+                    }
+                }
+
                 let search_str: Cow<OsStr> = if config.search_full_path {
                     let path_abs_buf = filesystem::path_absolute_form(entry_path)
                         .expect("Retrieving absolute path succeeds");

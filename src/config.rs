@@ -11,6 +11,7 @@ use crate::filetypes::FileTypes;
 use crate::filter::OwnerFilter;
 use crate::filter::{SizeFilter, TimeFilter};
 use crate::fmt::FormatTemplate;
+use crate::match_sets::CompiledMatchSet;
 
 /// Configuration options for *fd*.
 pub struct Config {
@@ -68,6 +69,12 @@ pub struct Config {
 
     /// Bash conditional expression that excludes matching entries.
     pub exclude_if: Option<Expr>,
+
+    /// Match sets that include matching entries.
+    pub include_match_sets: Vec<CompiledMatchSet>,
+
+    /// Match sets that exclude matching entries.
+    pub exclude_match_sets: Vec<CompiledMatchSet>,
 
     /// The number of threads to use.
     pub threads: usize,

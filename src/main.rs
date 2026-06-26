@@ -10,6 +10,7 @@ mod filetypes;
 mod filter;
 mod fmt;
 mod hyperlink;
+mod match_sets;
 mod output;
 mod regex_helper;
 mod walk;
@@ -249,6 +250,14 @@ fn construct_config(
                 .iter()
                 .any(|pat| pattern_has_uppercase_char(pat)));
 
+    let selected_match_sets = match_sets::load_selected(
+        &opts.match_sets,
+        &opts.exclude_match_sets,
+        opts.load_match_sets || !(opts.match_sets.is_empty() && opts.exclude_match_sets.is_empty()),
+        opts.no_match_sets,
+        case_sensitive,
+    )?;
+
     let path_separator = opts
         .path_separator
         .take()
@@ -315,6 +324,8 @@ fn construct_config(
         bash_patterns,
         prune_if,
         exclude_if,
+        include_match_sets: selected_match_sets.include,
+        exclude_match_sets: selected_match_sets.exclude,
         threads: opts.threads().get(),
         max_buffer_time: opts.max_buffer_time,
         sort,
