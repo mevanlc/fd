@@ -16,7 +16,6 @@ use ignore::overrides::{Override, OverrideBuilder};
 use ignore::{WalkBuilder, WalkParallel, WalkState};
 use regex::bytes::Regex;
 
-use crate::bash_cond;
 use crate::config::Config;
 use crate::config::{SortBy, SortConfig, SortTextOptions};
 use crate::dir_entry::DirEntry;
@@ -790,8 +789,8 @@ impl WorkerState {
                 let is_dir = entry.file_type().is_some_and(|ft| ft.is_dir());
                 let context_dir = entry_context_dir(entry_path, is_dir);
 
-                if let Some(expr) = &config.exclude_if {
-                    match bash_cond::evaluate(expr, entry_path, context_dir, config) {
+                if let Some(condition) = &config.exclude_if {
+                    match condition.evaluate(entry_path, context_dir, config) {
                         Ok(true) if is_dir => return WalkState::Skip,
                         Ok(true) => return WalkState::Continue,
                         Ok(false) => {}
@@ -804,7 +803,7 @@ impl WorkerState {
 
                 let prune_if_matched = if is_dir {
                     if let Some(expr) = &config.prune_if {
-                        match bash_cond::evaluate(expr, entry_path, context_dir, config) {
+                        match expr.evaluate(entry_path, context_dir, config) {
                             Ok(result) => result,
                             Err(err) => {
                                 print_error(format!("{err:#}"));

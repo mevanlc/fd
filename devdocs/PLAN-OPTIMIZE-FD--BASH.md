@@ -55,6 +55,30 @@ Synthetic corpus evidence, using `/usr/bin/time -p` fallback because `hyperfine`
 
 The optimized cases also kept the same output hashes as their baseline equivalents.
 
+After installing `hyperfine`, continued the same optimization lane:
+
+- `Condition` is now recursive for `&&`, `||`, and `!`, so fast subtrees can short-circuit before generic subtrees.
+- `--prune-if`, `--exclude-if`, and match-set `bash` clauses now use the same compiled condition representation as `--bash`.
+- `devdocs/bench-fd-bash.sh` now generates a benchmark `match-sets.kdl` and includes a `match-set-bash` row.
+
+Hyperfine evidence on the synthetic corpus, 5 runs, 1 warmup:
+
+| Case | Mean wall time | User | System | Notes |
+| --- | ---: | ---: | ---: | --- |
+| `native-glob` | 15.9ms | 12.9ms | 87.7ms | baseline |
+| `bash-name-eq` | 16.2ms | 13.0ms | 93.4ms | optimized |
+| `bash-name-eqeq` | 16.2ms | 13.4ms | 90.5ms | optimized |
+| `bash-name-glob` | 16.2ms | 14.1ms | 91.5ms | optimized |
+| `bash-path-regex` | 16.3ms | 13.9ms | 87.5ms | optimized |
+| `bash-file-test` | 17.2ms | 29.7ms | 88.8ms | still generic file-test path |
+| `bash-mixed` | 16.5ms | 20.4ms | 90.1ms | recursive fast/generic condition tree |
+| `exclude-if-target` | 15.7ms | 15.6ms | 88.4ms | optimized |
+| `match-set-bash` | 17.0ms | 13.5ms | 90.6ms | optimized plus config load |
+| `native-glob-t1` | 18.4ms | 5.6ms | 12.9ms | single-thread baseline |
+| `bash-name-eq-t1` | 18.1ms | 5.6ms | 12.7ms | optimized |
+
+Intermediate hyperfine measurements before the recursive/exclude/match-set continuation had `bash-mixed` at 26.5ms and `exclude-if-target` at 24.0ms on the same harness shape.
+
 ## Current Hot Path
 
 Relevant `fd` paths:

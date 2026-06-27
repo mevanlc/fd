@@ -7,6 +7,7 @@ REPO_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
 COMMAND="all"
 BUILD=1
 CORPUS_DIR="${FD_BASH_BENCH_CORPUS:-$REPO_ROOT/target/fd-bash-bench-corpus}"
+CONFIG_DIR="${FD_BASH_BENCH_CONFIG:-$REPO_ROOT/target/fd-bash-bench-config}"
 FD_BIN="${FD_BASH_BENCH_FD:-$REPO_ROOT/target/release/fd}"
 RUNS="${FD_BASH_BENCH_RUNS:-10}"
 WARMUP="${FD_BASH_BENCH_WARMUP:-3}"
@@ -23,6 +24,8 @@ optimization benchmark matrix from devdocs/PLAN-OPTIMIZE-FD--BASH.md.
 Options:
   --no-build              Do not run cargo build --release --locked.
   --corpus PATH           Corpus directory. Defaults to target/fd-bash-bench-corpus.
+  --config PATH           XDG config directory for generated match sets.
+                          Defaults to target/fd-bash-bench-config.
   --fd PATH               fd binary. Defaults to target/release/fd.
   --runs N                Benchmark runs. Defaults to 10.
   --warmup N              Hyperfine warmup runs. Defaults to 3.
@@ -32,6 +35,7 @@ Options:
 
 Environment defaults:
   FD_BASH_BENCH_CORPUS
+  FD_BASH_BENCH_CONFIG
   FD_BASH_BENCH_FD
   FD_BASH_BENCH_RUNS
   FD_BASH_BENCH_WARMUP
@@ -64,6 +68,11 @@ parse_args() {
             --fd)
                 [[ $# -ge 2 ]] || die "--fd requires a path"
                 FD_BIN="$2"
+                shift 2
+                ;;
+            --config)
+                [[ $# -ge 2 ]] || die "--config requires a path"
+                CONFIG_DIR="$2"
                 shift 2
                 ;;
             --runs)
@@ -123,7 +132,9 @@ ensure_fd() {
 
 generate_corpus() {
     rm -rf "$CORPUS_DIR"
+    rm -rf "$CONFIG_DIR"
     mkdir -p "$CORPUS_DIR"
+    mkdir -p "$CONFIG_DIR/fd"
 
     local i j top previous
     for ((i = 0; i < FANOUT; i++)); do
@@ -153,7 +164,16 @@ generate_corpus() {
         fi
     done
 
+    cat > "$CONFIG_DIR/fd/match-sets.kdl" <<'KDL'
+"bench-src" {
+    dir bash {
+        "${/} = src"
+    }
+}
+KDL
+
     printf 'generated corpus: %s\n' "$CORPUS_DIR"
+    printf 'generated config: %s\n' "$CONFIG_DIR"
 }
 
 hasher_name() {
@@ -195,7 +215,7 @@ hash_sorted_output() {
 run_hashes() {
     [[ -d "$CORPUS_DIR" ]] || die "corpus does not exist: $CORPUS_DIR"
 
-    local tool native bash_eq bash_eq2 bash_glob bash_regex file_test exclude_if
+    local tool native bash_eq bash_eq2 bash_glob bash_regex file_test exclude_if match_set
     tool=$(hasher_name)
 
     native=$(hash_sorted_output "$tool" "$FD_BIN" -g src "$CORPUS_DIR")
@@ -205,6 +225,7 @@ run_hashes() {
     bash_regex=$(hash_sorted_output "$tool" "$FD_BIN" --bash -- '${} =~ project-[0-9]+/src/' "$CORPUS_DIR")
     file_test=$(hash_sorted_output "$tool" "$FD_BIN" --bash -- '-f ${}' "$CORPUS_DIR")
     exclude_if=$(hash_sorted_output "$tool" "$FD_BIN" . "$CORPUS_DIR" --exclude-if '${/} = target')
+    match_set=$(hash_sorted_output "$tool" env XDG_CONFIG_HOME="$CONFIG_DIR" "$FD_BIN" --match-sets -m bench-src . "$CORPUS_DIR")
 
     printf '%-24s %s\n' "native -g src" "$native"
     printf '%-24s %s\n' "bash name =" "$bash_eq"
@@ -213,9 +234,11 @@ run_hashes() {
     printf '%-24s %s\n' "bash regex" "$bash_regex"
     printf '%-24s %s\n' "bash -f current" "$file_test"
     printf '%-24s %s\n' "exclude-if target" "$exclude_if"
+    printf '%-24s %s\n' "match-set bash" "$match_set"
 
     [[ "$native" == "$bash_eq" ]] || die "native -g src and bash '${/} = src' hashes differ"
     [[ "$native" == "$bash_eq2" ]] || die "native -g src and bash '${/} == src' hashes differ"
+    [[ "$native" == "$match_set" ]] || die "native -g src and match-set bash hashes differ"
 }
 
 quote_arg() {
@@ -223,9 +246,10 @@ quote_arg() {
 }
 
 build_bench_commands() {
-    local fd_q corpus_q
+    local fd_q corpus_q config_q
     fd_q=$(quote_arg "$FD_BIN")
     corpus_q=$(quote_arg "$CORPUS_DIR")
+    config_q=$(quote_arg "$CONFIG_DIR")
 
     BENCH_LABELS=(
         "native-glob"
@@ -236,6 +260,7 @@ build_bench_commands() {
         "bash-file-test"
         "bash-mixed"
         "exclude-if-target"
+        "match-set-bash"
         "native-glob-t1"
         "bash-name-eq-t1"
     )
@@ -249,6 +274,7 @@ build_bench_commands() {
         "$fd_q --bash -- '-f \${}' $corpus_q > /dev/null"
         "$fd_q --bash -- '\${/} == *.rs && -f \${}' $corpus_q > /dev/null"
         "$fd_q . $corpus_q --exclude-if '\${/} = target' > /dev/null"
+        "env XDG_CONFIG_HOME=$config_q $fd_q --match-sets -m bench-src . $corpus_q > /dev/null"
         "$fd_q --threads 1 -g src $corpus_q > /dev/null"
         "$fd_q --threads 1 --bash -- '\${/} = src' $corpus_q > /dev/null"
     )

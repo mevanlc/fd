@@ -254,6 +254,12 @@ fn construct_config(
         .into_iter()
         .map(|expr| bash_cond::Condition::compile(expr, case_sensitive))
         .collect::<Result<Vec<_>>>()?;
+    let prune_if = prune_if
+        .map(|expr| bash_cond::Condition::compile(expr, case_sensitive))
+        .transpose()?;
+    let exclude_if = exclude_if
+        .map(|expr| bash_cond::Condition::compile(expr, case_sensitive))
+        .transpose()?;
 
     let selected_match_sets = match_sets::load_selected(
         &opts.match_sets,

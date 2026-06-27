@@ -3,8 +3,6 @@ use std::{path::PathBuf, sync::Arc, time::Duration};
 use lscolors::LsColors;
 use regex::bytes::RegexSet;
 
-use bash_condexp::Expr;
-
 use crate::bash_cond::Condition;
 use crate::exec::CommandSet;
 use crate::filetypes::FileTypes;
@@ -66,10 +64,10 @@ pub struct Config {
     pub bash_patterns: Vec<Condition>,
 
     /// Bash conditional expression that skips descendants of matching directories.
-    pub prune_if: Option<Expr>,
+    pub prune_if: Option<Condition>,
 
     /// Bash conditional expression that excludes matching entries.
-    pub exclude_if: Option<Expr>,
+    pub exclude_if: Option<Condition>,
 
     /// Match sets that include matching entries.
     pub include_match_sets: Vec<CompiledMatchSet>,

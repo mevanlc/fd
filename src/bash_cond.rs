@@ -15,13 +15,32 @@ pub fn parse_expr(input: &str, option: &str) -> Result<Expr> {
     parse(input).with_context(|| format!("Invalid {option} conditional expression"))
 }
 
+#[derive(Clone)]
 pub enum Condition {
+    And(Box<Condition>, Box<Condition>),
+    Or(Box<Condition>, Box<Condition>),
+    Not(Box<Condition>),
     Fast(FastCondition),
     Generic(Expr),
 }
 
 impl Condition {
     pub fn compile(expr: Expr, case_sensitive: bool) -> Result<Self> {
+        match expr {
+            Expr::And(left, right) => Ok(Self::And(
+                Box::new(Self::compile(*left, case_sensitive)?),
+                Box::new(Self::compile(*right, case_sensitive)?),
+            )),
+            Expr::Or(left, right) => Ok(Self::Or(
+                Box::new(Self::compile(*left, case_sensitive)?),
+                Box::new(Self::compile(*right, case_sensitive)?),
+            )),
+            Expr::Not(inner) => Ok(Self::Not(Box::new(Self::compile(*inner, case_sensitive)?))),
+            expr => Self::compile_primary(expr, case_sensitive),
+        }
+    }
+
+    fn compile_primary(expr: Expr, case_sensitive: bool) -> Result<Self> {
         match FastCondition::compile(&expr, case_sensitive)? {
             Some(condition) => Ok(Self::Fast(condition)),
             None => Ok(Self::Generic(expr)),
@@ -30,17 +49,34 @@ impl Condition {
 
     pub fn evaluate(&self, entry_path: &Path, context_dir: &Path, config: &Config) -> Result<bool> {
         match self {
+            Self::And(left, right) => {
+                if left.evaluate(entry_path, context_dir, config)? {
+                    right.evaluate(entry_path, context_dir, config)
+                } else {
+                    Ok(false)
+                }
+            }
+            Self::Or(left, right) => {
+                if left.evaluate(entry_path, context_dir, config)? {
+                    Ok(true)
+                } else {
+                    right.evaluate(entry_path, context_dir, config)
+                }
+            }
+            Self::Not(inner) => Ok(!inner.evaluate(entry_path, context_dir, config)?),
             Self::Fast(condition) => Ok(condition.matches(current_path(entry_path, config))),
             Self::Generic(expr) => evaluate(expr, entry_path, context_dir, config),
         }
     }
 }
 
+#[derive(Clone)]
 pub struct FastCondition {
     subject: Subject,
     matcher: FastMatcher,
 }
 
+#[derive(Clone)]
 enum FastMatcher {
     Regex(Regex),
     RegexNot(Regex),

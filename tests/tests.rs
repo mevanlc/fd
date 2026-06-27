@@ -1201,6 +1201,13 @@ fn test_bash_search() {
         one/two/c.foo
         one/two/three/d.foo",
     );
+    te.assert_output(
+        &["--bash", "${/} == *.foo && -f ${}"],
+        "a.foo
+        one/b.foo
+        one/two/c.foo
+        one/two/three/d.foo",
+    );
 }
 
 #[test]

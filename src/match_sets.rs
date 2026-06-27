@@ -66,7 +66,7 @@ enum PatternKind {
 
 enum Matcher {
     Regex(Regex),
-    Bash(bash_condexp::Expr),
+    Bash(bash_cond::Condition),
 }
 
 impl CompiledMatchSet {
@@ -91,7 +91,7 @@ impl CompiledMatchClause {
                 let subject = self.subject.resolve(entry.path());
                 Ok(regex.is_match(&filesystem::osstr_to_bytes(subject)))
             }
-            Matcher::Bash(expr) => bash_cond::evaluate(expr, entry.path(), context_dir, config),
+            Matcher::Bash(condition) => condition.evaluate(entry.path(), context_dir, config),
         }
     }
 }
@@ -441,7 +441,9 @@ fn compile_matcher(
             };
             build_regex(&regex, case_sensitive).map(Matcher::Regex)
         }
-        PatternKind::Bash => bash_cond::parse_expr(pattern, "match-set bash").map(Matcher::Bash),
+        PatternKind::Bash => bash_cond::parse_expr(pattern, "match-set bash")
+            .and_then(|expr| bash_cond::Condition::compile(expr, case_sensitive))
+            .map(Matcher::Bash),
     }
 }
 
