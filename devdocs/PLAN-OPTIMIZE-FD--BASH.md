@@ -29,6 +29,32 @@ This plan covers changes in both repositories:
 
 Speculative experiments are allowed, including experiments that only pay off after another experiment lands. They must still carry benchmark evidence. If an experiment does not improve the agreed benchmark set, and is not required by a later experiment that does, cull it.
 
+## Progress
+
+2026-06-27:
+
+- Initial plan committed as `11125f1` (`Document fd bash optimization plan`).
+- Added `devdocs/bench-fd-bash.sh` to generate the synthetic corpus, verify hashes, and run the benchmark matrix.
+- Accepted a first fd-side subset compiler for single-primary `--bash` inclusion predicates whose RHS glob or regex is constant. This precompiles bash-condexp glob/regex matchers once during config construction.
+- Culled the first standalone `MapEnv` replacement experiment because it did not produce a measurable standalone improvement before the subset compiler was added.
+
+Synthetic corpus evidence, using `/usr/bin/time -p` fallback because `hyperfine` was not installed:
+
+| Case | Before user+sys | After user+sys | Notes |
+| --- | ---: | ---: | --- |
+| `native-glob` | 0.12s | 0.12s | baseline |
+| `bash-name-eq` | 0.22s | 0.12s | optimized |
+| `bash-name-eqeq` | 0.24s | 0.12s | optimized |
+| `bash-name-glob` | 0.29s | 0.12s | optimized |
+| `bash-path-regex` | 0.47s | 0.12s | optimized |
+| `bash-file-test` | 0.13s | 0.14s | still generic |
+| `bash-mixed` | 0.29s | 0.29s | still generic |
+| `exclude-if-target` | 0.21s | 0.22s | still generic |
+| `native-glob-t1` | 0.03s | 0.03s | single-thread baseline |
+| `bash-name-eq-t1` | 0.09s | 0.03s | optimized |
+
+The optimized cases also kept the same output hashes as their baseline equivalents.
+
 ## Current Hot Path
 
 Relevant `fd` paths:
@@ -103,6 +129,14 @@ hyperfine --warmup 3 --runs 10 \
 ```
 
 Add a reproducible synthetic corpus before landing larger changes. The corpus should include many files, many directories, repeated `src` basenames, hidden entries, symlinks, and a few sidecar files for file-test expressions. Keep the generator deterministic and cheap enough for local regression runs.
+
+Initial harness:
+
+```sh
+devdocs/bench-fd-bash.sh all
+```
+
+The harness builds `target/release/fd`, generates a deterministic corpus under `target/fd-bash-bench-corpus`, checks output hashes, and runs the benchmark matrix with `hyperfine` when available or `/usr/bin/time -p` otherwise.
 
 Minimum benchmark matrix:
 

@@ -250,6 +250,11 @@ fn construct_config(
                 .iter()
                 .any(|pat| pattern_has_uppercase_char(pat)));
 
+    let bash_patterns = bash_patterns
+        .into_iter()
+        .map(|expr| bash_cond::Condition::compile(expr, case_sensitive))
+        .collect::<Result<Vec<_>>>()?;
+
     let selected_match_sets = match_sets::load_selected(
         &opts.match_sets,
         &opts.exclude_match_sets,

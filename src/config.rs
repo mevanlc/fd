@@ -5,6 +5,7 @@ use regex::bytes::RegexSet;
 
 use bash_condexp::Expr;
 
+use crate::bash_cond::Condition;
 use crate::exec::CommandSet;
 use crate::filetypes::FileTypes;
 #[cfg(unix)]
@@ -62,7 +63,7 @@ pub struct Config {
     pub prune: bool,
 
     /// Bash conditional expressions that all entries must satisfy.
-    pub bash_patterns: Vec<Expr>,
+    pub bash_patterns: Vec<Condition>,
 
     /// Bash conditional expression that skips descendants of matching directories.
     pub prune_if: Option<Expr>,

@@ -1187,6 +1187,15 @@ fn test_bash_search() {
 
     te.assert_output(&["--bash", "${/} == c.foo"], "one/two/c.foo");
     te.assert_output(
+        &["--bash", "${/} =~ c[.]foo"],
+        "one/two/c.foo
+        one/two/C.Foo2",
+    );
+    te.assert_output(
+        &["--ignore-case", "--bash", "${/} == C.FOO"],
+        "one/two/c.foo",
+    );
+    te.assert_output(
         &["--bash", "${/} == *.foo", "--and", "${} =~ ^one/"],
         "one/b.foo
         one/two/c.foo

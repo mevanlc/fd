@@ -878,8 +878,8 @@ impl WorkerState {
                     return WalkState::Continue;
                 }
 
-                for expr in &config.bash_patterns {
-                    match bash_cond::evaluate(expr, entry_path, context_dir, config) {
+                for condition in &config.bash_patterns {
+                    match condition.evaluate(entry_path, context_dir, config) {
                         Ok(true) => {}
                         Ok(false) => return WalkState::Continue,
                         Err(err) => {
