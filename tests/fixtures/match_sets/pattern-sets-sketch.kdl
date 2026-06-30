@@ -9,10 +9,10 @@
     }
 }
 
-"outputs" {
+"build_output" {
     dir bash {
         "${/} == target && -f CACHEDIR.TAG"
-        "${/} == build && -f ../build.gradle.kts"
+        "${/} == build && [[ -f ../build.gradle.kts || -f ../build.gradle || -f ../gradle.properties ]]"
     }
 }
 
@@ -23,7 +23,7 @@
     }
 }
 
-"packages" {
+"package" {
     dir name literal full {
         "node_modules"
         "__pypackages__"
