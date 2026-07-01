@@ -2862,6 +2862,25 @@ fn test_list_details() {
     te.assert_failure(&["--sort", "m", "--exec", "echo"]);
 }
 
+/// '--list-details' can be combined with '--absolute-path', in which case the
+/// long listing shows absolute paths.
+#[test]
+fn test_list_details_with_absolute_path() {
+    let (te, abs_path) = get_test_env_with_abs_path(DEFAULT_DIRS, DEFAULT_FILES);
+
+    let output = te.assert_success_and_get_output(".", &["--list-details", "--absolute-path"]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(
+        stdout.contains(&format!("{abs_path}/a.foo")),
+        "`fd --list-details --absolute-path` did not print absolute paths:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains(" ./"),
+        "`fd --list-details --absolute-path` still printed relative paths:\n{stdout}"
+    );
+}
+
 #[test]
 fn test_list_details_formats_modified_time_like_ls() {
     let te = TestEnv::new(&[], &[]);

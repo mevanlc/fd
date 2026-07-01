@@ -227,7 +227,6 @@ pub struct Opts {
     #[arg(
         long,
         short = 'l',
-        conflicts_with("absolute_path"),
         help = "Use a long listing format with metadata, similar to ls -l",
         long_help
     )]
