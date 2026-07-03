@@ -24,6 +24,7 @@ use crate::exec;
 use crate::exit_codes::{ExitCode, merge_exitcodes};
 use crate::filesystem;
 use crate::output;
+use crate::summarize::Summarizer;
 
 /// The receiver thread can either be buffering results or directly streaming to the console.
 #[derive(PartialEq)]
@@ -148,6 +149,9 @@ struct ReceiverBuffer<'a, W> {
     buffer: Vec<DirEntry>,
     /// Result count.
     num_results: usize,
+    /// Summary accumulator, if `--summarize` was supplied. When set, results are
+    /// counted instead of printed, and the summary is printed at the end.
+    summarizer: Option<Summarizer>,
 }
 
 impl<'a, W: Write> ReceiverBuffer<'a, W> {
@@ -169,6 +173,7 @@ impl<'a, W: Write> ReceiverBuffer<'a, W> {
             deadline,
             buffer: Vec::with_capacity(MAX_BUFFER_LENGTH),
             num_results: 0,
+            summarizer: config.summarize.as_ref().map(Summarizer::new),
         }
     }
 
@@ -211,17 +216,21 @@ impl<'a, W: Write> ReceiverBuffer<'a, W> {
                                 return Err(ExitCode::HasResults(true));
                             }
 
-                            match self.mode {
-                                ReceiverMode::Buffering => {
-                                    self.buffer.push(dir_entry);
-                                    if self.config.sort.is_none()
-                                        && self.buffer.len() > MAX_BUFFER_LENGTH
-                                    {
-                                        self.stream()?;
+                            if let Some(summarizer) = &mut self.summarizer {
+                                summarizer.record(&dir_entry);
+                            } else {
+                                match self.mode {
+                                    ReceiverMode::Buffering => {
+                                        self.buffer.push(dir_entry);
+                                        if self.config.sort.is_none()
+                                            && self.buffer.len() > MAX_BUFFER_LENGTH
+                                        {
+                                            self.stream()?;
+                                        }
                                     }
-                                }
-                                ReceiverMode::Streaming => {
-                                    self.print(&dir_entry)?;
+                                    ReceiverMode::Streaming => {
+                                        self.print(&dir_entry)?;
+                                    }
                                 }
                             }
 
@@ -288,6 +297,17 @@ impl<'a, W: Write> ReceiverBuffer<'a, W> {
 
     /// Stop looping.
     fn stop(&mut self) -> Result<(), ExitCode> {
+        if let Some(summarizer) = self.summarizer.take() {
+            if let Err(e) = summarizer.write(&mut self.stdout)
+                && e.kind() != ::std::io::ErrorKind::BrokenPipe
+            {
+                print_error(format!("Could not write to output: {e}"));
+                return Err(ExitCode::GeneralError);
+            }
+            self.flush()?;
+            return Err(ExitCode::Success);
+        }
+
         if self.mode == ReceiverMode::Buffering {
             self.sort_buffer();
             self.stream()?;

@@ -18,6 +18,7 @@ use crate::filesystem;
 #[cfg(unix)]
 use crate::filter::OwnerFilter;
 use crate::filter::SizeFilter;
+use crate::summarize::SummarizeSpec;
 
 #[derive(Parser)]
 #[command(
@@ -559,6 +560,31 @@ pub struct Opts {
         conflicts_with = "list_details"
     )]
     pub format: Option<String>,
+
+    /// Instead of printing the search results, print a summary of them.
+    ///
+    /// The summary-spec has the form '<summary>[:<options>]'. The only summary currently
+    /// available is 'fext', which counts how many search results share each file extension.
+    /// For dotfiles (names starting with '.'), the entire filename is treated as the
+    /// extension; entries without an extension are counted under '(none)'.
+    ///
+    /// The options are single letters, each of which may be prefixed with '-' to disable it
+    /// or '@' to use its default. If an option is repeated, the last occurrence wins.
+    /// {n}    i    treat case variations of an extension as the same extension
+    /// {n}         (default: enabled on macOS and Windows, disabled elsewhere)
+    /// {n}    d    include dotfiles (default: enabled)
+    /// {n}    s    sort by ascending count (default); '-s' sorts by descending count
+    ///
+    /// Examples: '--summarize fext', '--summarize fext:@d-i-s'
+    #[arg(
+        long,
+        value_name = "summary-spec",
+        value_parser = str::parse::<SummarizeSpec>,
+        conflicts_with_all(["execs", "format", "quiet"]),
+        help = "Print a summary of the search results",
+        long_help,
+    )]
+    pub summarize: Option<SummarizeSpec>,
 
     #[command(flatten)]
     pub exec: Exec,

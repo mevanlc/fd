@@ -1593,6 +1593,143 @@ fn test_extension() {
     te4.assert_output(&["--hidden", "--extension", ".hidden"], "test.hidden");
 }
 
+/// Assert that fd produces this exact stdout (--summarize output is
+/// order- and alignment-sensitive, so the normalizing assert_output
+/// helpers cannot be used).
+#[cfg(test)]
+fn assert_exact_output(te: &TestEnv, args: &[&str], expected: &str) {
+    let output = te.assert_success_and_get_output(".", args);
+    assert_eq!(String::from_utf8_lossy(&output.stdout), expected);
+}
+
+/// File extensions summary (--summarize fext)
+#[test]
+fn test_summarize_fext() {
+    let te = TestEnv::new(
+        &[],
+        &[
+            "a.png",
+            "b.PNG",
+            "e.png",
+            "c.pdf",
+            "d.pdf",
+            "f.txt",
+            ".gitignore",
+            "noext",
+        ],
+    );
+
+    // The test environment also always contains a `symlink` entry (which,
+    // together with `noext`, counts under '(none)') and the hidden entries
+    // `.git/`, `.fdignore` and `.gitignore`.
+
+    // Case-insensitive, default sort (ascending count, ties by name).
+    assert_exact_output(
+        &te,
+        &["--summarize", "fext:i"],
+        "File Extensions Summary
+-----------------------
+1 txt
+2 (none)
+2 pdf
+3 png
+",
+    );
+
+    // Dotfiles are counted by their entire filename.
+    assert_exact_output(
+        &te,
+        &["--hidden", "--summarize", "fext:i"],
+        "File Extensions Summary
+-----------------------
+1 .fdignore
+1 .git
+1 .gitignore
+1 txt
+2 (none)
+2 pdf
+3 png
+",
+    );
+
+    // '-d' excludes dotfiles from the summary.
+    assert_exact_output(
+        &te,
+        &["--hidden", "--summarize", "fext:i-d"],
+        "File Extensions Summary
+-----------------------
+1 txt
+2 (none)
+2 pdf
+3 png
+",
+    );
+
+    // '-i' keeps case variations of an extension distinct.
+    assert_exact_output(
+        &te,
+        &["--summarize", "fext:-i"],
+        "File Extensions Summary
+-----------------------
+1 PNG
+1 txt
+2 (none)
+2 pdf
+2 png
+",
+    );
+
+    // '-s' sorts by descending count.
+    assert_exact_output(
+        &te,
+        &["--summarize", "fext:i-s"],
+        "File Extensions Summary
+-----------------------
+3 png
+2 (none)
+2 pdf
+1 txt
+",
+    );
+}
+
+/// Counts in a summary are right-aligned.
+#[test]
+fn test_summarize_fext_alignment() {
+    let te = TestEnv::new(
+        &[],
+        &[
+            "f0.a", "f1.a", "f2.a", "f3.a", "f4.a", "f5.a", "f6.a", "f7.a", "f8.a", "f9.a", "x.b",
+        ],
+    );
+
+    assert_exact_output(
+        &te,
+        &["--summarize", "fext"],
+        "File Extensions Summary
+-----------------------
+ 1 (none)
+ 1 b
+10 a
+",
+    );
+}
+
+/// Invalid summary-specs are rejected
+#[test]
+fn test_summarize_invalid_spec() {
+    let te = TestEnv::new(&[], &["a.png"]);
+
+    te.assert_failure(&["--summarize", "bogus"]);
+    te.assert_failure(&["--summarize", "fext:z"]);
+    te.assert_failure(&["--summarize", "fext:-"]);
+    // --summarize replaces the normal output, so it conflicts with other
+    // output-consuming options.
+    te.assert_failure(&["--summarize", "fext", "--exec", "echo"]);
+    te.assert_failure(&["--summarize", "fext", "--quiet"]);
+    te.assert_failure(&["--summarize", "fext", "--format", "{}"]);
+}
+
 /// No file extension (test for the pattern provided in the --help text)
 #[test]
 fn test_no_extension() {

@@ -11,6 +11,7 @@ use crate::filter::OwnerFilter;
 use crate::filter::{SizeFilter, TimeFilter};
 use crate::fmt::FormatTemplate;
 use crate::match_sets::CompiledMatchSet;
+use crate::summarize::SummarizeSpec;
 
 /// Configuration options for *fd*.
 pub struct Config {
@@ -113,6 +114,9 @@ pub struct Config {
 
     /// A format string to use to format results, similarly to exec
     pub format: Option<FormatTemplate>,
+
+    /// Print a summary of the search results instead of the results themselves.
+    pub summarize: Option<SummarizeSpec>,
 
     /// If a value is supplied, each item found will be used to generate and execute commands.
     pub command: Option<Arc<CommandSet>>,

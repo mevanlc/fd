@@ -469,6 +469,28 @@ Notice that you can use "{{" and "}}" to escape "{" and "}" respectively, which 
 useful if you need to include the literal text of one of the above placeholders.
 .RE
 .TP
+.BI "\-\-summarize " summary\-spec
+Instead of printing the search results, print a summary of them.
+
+The \fIsummary-spec\fR has the form '\fIsummary\fR[:\fIoptions\fR]'. The only summary currently
+available is 'fext', which counts how many search results share each file extension. For dotfiles
+(names starting with '.'), the entire filename is treated as the extension; entries without an
+extension are counted under '(none)'.
+
+The options are single letters, each of which may be prefixed with '\-' to disable it or '@' to
+use its default. If an option is repeated, the last occurrence wins.
+.RS
+.IP i
+treat case variations of an extension as the same extension (default: enabled on macOS and
+Windows, disabled elsewhere)
+.IP d
+include dotfiles (default: enabled)
+.IP s
+sort by ascending count (default); '\-s' sorts by descending count
+.P
+Examples: '\-\-summarize fext', '\-\-summarize fext:@d\-i\-s'
+.RE
+.TP
 .BI "\-x, \-\-exec " command
 .RS
 Execute

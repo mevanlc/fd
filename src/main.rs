@@ -13,6 +13,7 @@ mod hyperlink;
 mod match_sets;
 mod output;
 mod regex_helper;
+mod summarize;
 mod walk;
 
 use std::env;
@@ -389,6 +390,7 @@ fn construct_config(
             .format
             .as_deref()
             .map(crate::fmt::FormatTemplate::parse),
+        summarize: opts.summarize.take(),
         command: command.map(Arc::new),
         batch_size: opts.batch_size,
         exclude_patterns: opts.exclude.iter().map(|p| String::from("!") + p).collect(),
