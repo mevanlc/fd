@@ -1,4 +1,29 @@
-# Upcoming release
+# Unreleased
+
+## Features
+- Add `--ignore-parent` option to override `--no-ignore-parent`, see #1958 (@tmchow)
+- Add `--exact` option to match the entire filename exactly (literal, non-substring).
+
+## Bugfixes
+- Sanitize control characters and bidirectional override characters in filenames
+  when output goes to a terminal, to prevent terminal escape-sequence injection.
+  Also reject a placeholder as the executable for `--exec-batch`, while still
+  allowing it for `--exec`.
+- Handle invalid working directories gracefully when using `--full-path`, see #1900 (@Xavrir).
+- Fire the "search pattern contains a path separator" diagnostic for any pattern containing `/`, not just patterns that happen to name an existing directory. Preserves the legacy Windows behaviour that also flags native `\` separators when the pattern resolves to a real directory. See #1873.
+- Also fire the "search pattern contains a path separator" diagnostic for `--and` patterns, not only the primary positional pattern. `--and` patterns are matched against the file name just like the primary pattern, so a path separator in them silently returned zero results. See #1873.
+- Fix bug where passing "-" as a directory argument didn't actually search that directory, see #849 (@Sean-Kenneth-Doherty).
+
+# 10.4.2
+
+## Bugfixes
+- Fixed performance regression due to `--ignore-contain`; see #1913 and #1914
+
+# 10.4.1
+
+This is just a re-release of 10.4.0 due to an issue with the 10.4.0 release.
+
+# 10.4.0
 
 ## Features
 - Add `--ignore-contain` option to ignore directories containing a named entry (e.g. to ignore [`CACHEDIR.TAG`](https://bford.info/cachedir/)); see #1727 (@fischman).
@@ -15,12 +40,12 @@
     - #1667
     - #1813
 
+- Fix completions for alias `fdfind` in deb release, see #1888 (@skane-lukas)
+
 ## Changes
 
 - Minimum required rust version has been increased to 1.90.0. Notably, this means dropping fully support for intel Mac and Windows 7.
-
-
-## Other
+- Statically link the CRT for MSVC builds via Cargo config to avoid runtime DLL dependencies, see #1874 (@FidelSch)
 
 # 10.3.0
 

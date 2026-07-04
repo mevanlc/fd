@@ -27,19 +27,6 @@ While it does not aim to support all of `find`'s powerful functionality, it prov
 * The command name is *50%* shorter[\*](https://github.com/ggreer/the_silver_searcher) than
   `find` :-).
 
-## Sponsors
-
-A special *thank you* goes to our biggest <a href="doc/sponsors.md">sponsor</a>:<br>
-
-<a href="https://tuple.app/fd">
-  <img src="doc/sponsors/tuple-logo.png" width="200" alt="Tuple">
-  <br>
-  <strong>Tuple, the premier screen sharing app for developers</strong>
-  <br>
-  <sub>Available for MacOS &amp; Windows</sub>
-</a>
-
-
 ## Demo
 
 ![Demo](doc/screencast.svg)
@@ -189,6 +176,12 @@ fd -e h -e cpp -x clang-format -i
 Note how the `-i` option to `clang-format` can be passed as a separate argument. This is why
 we put the `-x` option last.
 
+Any positional arguments after `-x` belong to the command template, not to `fd` itself. If you
+also want to pass a pattern or search path, put `-x` last:
+``` bash
+fd pattern path -x echo
+```
+
 Find all `test_*.py` files and open them in your favorite editor:
 ``` bash
 fd -g 'test_*.py' -X vim
@@ -229,6 +222,9 @@ fd -tf -x md5sum > file_checksums.txt
 
 The `-x` and `-X` options take a *command template* as a series of arguments (instead of a single string).
 If you want to add additional options to `fd` after the command template, you can terminate it with a `\;`.
+
+For example, `fd -x echo \; pattern path` treats `pattern path` as `fd` arguments instead of
+passing them to `echo`. In practice, it is often clearer to write `fd pattern path -x echo`.
 
 The syntax for generating commands is similar to that of [GNU Parallel](https://www.gnu.org/software/parallel/):
 
@@ -313,7 +309,7 @@ This is the output of `fd -h`. To see the full set of command-line options, use 
 also includes a much more detailed help text.
 
 ```
-Usage: fd [OPTIONS] [pattern [path...]]
+Usage: fd [OPTIONS] [pattern [path]...]
 
 Arguments:
   [pattern]  the search pattern (a regular expression, unless '--glob' is used; optional)
@@ -331,11 +327,11 @@ Options:
   -L, --follow                     Follow symbolic links
   -p, --full-path                  Search full abs. path (default: filename only)
   -d, --max-depth <depth>          Set maximum search depth (default: none)
-  -E, --exclude <pattern>          Exclude entries that match the given glob pattern
+  -E, --exclude <glob>             Exclude entries that match the given glob pattern
   -t, --type <filetype>            Filter by type: file (f), directory (d/dir), symlink (l),
                                    executable (x), empty (e), socket (s), pipe (p), char-device
                                    (c), block-device (b)
-  -e, --extension <ext>            Filter by file extension
+  -e, --extension <ext>            Filter by extension
   -S, --size <size>                Limit results based on the size of files
       --changed-within <date|dur>  Filter by file modification time (newer than)
       --changed-before <date|dur>  Filter by file modification time (older than)
@@ -347,7 +343,7 @@ Options:
                                    always, never]
       --hyperlink[=<when>]         Add hyperlinks to output paths [default: never] [possible
                                    values: auto, always, never]
-  -C, --base-directory <path>      Change the search path to <path>
+      --ignore-contain <name>      Ignore directories containing the named entry
   -h, --help                       Print help (see more with '--help')
   -V, --version                    Print version
 ```
@@ -356,7 +352,7 @@ Note that options can be given after the pattern and/or path as well.
 
 ## Benchmark
 
-Let's search my home folder for files that end in `[0-9].jpg`. It contains ~750.000
+Let's search my home folder for files that end in `[0-9].jpg`. It contains ~750,000
 subdirectories and about a 4 million files. For averaging and statistical analysis, I'm using
 [hyperfine](https://github.com/sharkdp/hyperfine). The following benchmarks are performed
 with a "warm"/pre-filled disk-cache (results for a "cold" disk-cache show the same trends).
@@ -450,6 +446,11 @@ Shell `alias`es and shell functions can not be used for command execution via `f
 you can use `export -f my_function` to make available to child processes. You would still
 need to call `fd -x bash -c 'my_function "$1"' bash`. For other use cases or shells, use
 a (temporary) shell script.
+
+### Placeholders in `-x`/`-X`
+
+Depending on your shell, you may need to quote the placeholders (`{}`, `{/}`, `{//}`,
+`{.}`, `{/.}`) to prevent the shell from interpreting them before `fd` sees them.
 
 ## Integration with other programs
 

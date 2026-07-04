@@ -374,6 +374,74 @@ fn test_multi_file_with_missing() {
     );
 }
 
+/// Without --full-path, a pattern containing '/' should always produce the
+/// path-separator diagnostic, even if the pattern does not name an existing
+/// directory. Before the fix for sharkdp/fd#1873 this only fired when the
+/// pattern happened to resolve to a real directory, so the common typo of
+/// pasting a full path silently returned zero matches.
+#[test]
+fn test_pattern_with_forward_slash_is_rejected() {
+    let te = TestEnv::new(DEFAULT_DIRS, DEFAULT_FILES);
+
+    // Pattern that is NOT a real directory; old behaviour: no warning.
+    te.assert_failure_with_error(
+        &["nonexistent/path"],
+        "[fd error]: The search pattern 'nonexistent/path' contains a path-separation character and will not lead to any search results.",
+    );
+
+    // Pattern that IS a real directory; old behaviour: warning. Must still fire.
+    te.assert_failure_with_error(
+        &["one/two/three"],
+        "[fd error]: The search pattern 'one/two/three' contains a path-separation character and will not lead to any search results.",
+    );
+}
+
+/// --full-path is the user's explicit opt-in to regex-over-full-path matching,
+/// so a path-separation character in the pattern is expected and must not
+/// trigger the diagnostic.
+///
+/// Gated off Windows: the actual match is regex-over-the-full-path, so a
+/// forward-slash pattern only matches Unix-style paths. On Windows the OS
+/// uses `\` and `one/two/c` (as a literal regex) does not match a real
+/// entry — the behaviour this test is pinning (the diagnostic does not
+/// fire) is covered by the fact that the invocation does not error.
+#[test]
+#[cfg(not(windows))]
+fn test_pattern_with_forward_slash_allowed_with_full_path() {
+    let te = TestEnv::new(DEFAULT_DIRS, DEFAULT_FILES);
+
+    te.assert_output(
+        &["--full-path", "one/two/c"],
+        "one/two/c.foo
+        one/two/C.Foo2",
+    );
+}
+
+/// `--and` patterns are matched against the file name exactly like the primary
+/// pattern, so a path separator in any of them is the same silent "no results"
+/// footgun and must trigger the same diagnostic. Regression for the sibling of
+/// #1873 left unchecked by #1975 (only the positional pattern was validated).
+#[test]
+fn test_and_pattern_with_forward_slash_is_rejected() {
+    let te = TestEnv::new(DEFAULT_DIRS, DEFAULT_FILES);
+
+    // Clean primary pattern, but a `--and` pattern carrying a path separator.
+    te.assert_failure_with_error(
+        &["foo", "--and", "nonexistent/path"],
+        "[fd error]: The search pattern 'nonexistent/path' contains a path-separation character and will not lead to any search results.",
+    );
+
+    // `--full-path` is the explicit opt-in and must still suppress the
+    // diagnostic for `--and` patterns too (the invocation runs and matches
+    // instead of erroring on the path separator).
+    #[cfg(not(windows))]
+    te.assert_output(
+        &["--full-path", "one/two/c", "--and", "two/c"],
+        "one/two/c.foo
+        one/two/C.Foo2",
+    );
+}
+
 /// Explicit root path
 #[test]
 fn test_explicit_root_path() {
@@ -414,6 +482,13 @@ fn test_explicit_root_path() {
         ../three/d.foo
         ../three/directory_foo/",
     );
+}
+
+#[test]
+fn test_single_dash_root_path() {
+    let te = TestEnv::new(&["-"], &["-/foo"]);
+
+    te.assert_output(&[".", "-"], "./-/foo");
 }
 
 /// Regex searches
@@ -2566,7 +2641,7 @@ fn test_exec_batch() {
 
         te.assert_failure_with_error(
             &["foo", "--exec-batch", "echo {}"],
-            "error: First argument of exec-batch is expected to be a fixed executable\n\
+            "error: First argument of --exec-batch must be a fixed executable, not a placeholder\n\
             \n\
             Usage: fd [OPTIONS] [pattern] [path]...\n\
             \n\
@@ -2795,14 +2870,57 @@ fn test_fixed_strings() {
     // Regex search, parens are treated as group
     te.assert_output(&["download (1)"], "");
 
-    // Literal search, parens are treated as characters
+    // Literal search, parens are treated as characters. Case-insensitive by default.
     te.assert_output(
         &["--fixed-strings", "download (1)"],
         "test2/Download (1).tar.gz",
     );
 
-    // Combine with --case-sensitive
+    // Combine with --case-sensitive (unmatched).
     te.assert_output(&["--fixed-strings", "--case-sensitive", "download (1)"], "");
+
+    // Combine with --case-sensitive (matched).
+    te.assert_output(
+        &["--fixed-strings", "--case-sensitive", "Download (1)"],
+        "test2/Download (1).tar.gz",
+    );
+}
+
+/// Literal search, non-substring (--exact)
+#[test]
+fn test_exact_literal_nonsubstring() {
+    let dirs = &["test1", "test2"];
+    let files = &[
+        "test1/a.foo",
+        "test1/aa.foo",
+        "test1/a.food",
+        "test1/ca.food",
+        "test1/a_foo",
+        "test2/Download (1).tar.gz",
+    ];
+    let te = TestEnv::new(dirs, files);
+
+    // Literal search, dot is treated as character. Should match only the exact name,
+    // not "aa.foo", "a.food", or "ca.food".
+    te.assert_output(&["--exact", "a.foo"], "test1/a.foo");
+
+    // Literal search, parens are treated as characters. Substring should not match.
+    te.assert_output(&["--exact", "download (1)"], "");
+
+    // Literal search, parens are treated as characters. Case-insensitive by default.
+    te.assert_output(
+        &["--exact", "download (1).tar.gz"],
+        "test2/Download (1).tar.gz",
+    );
+
+    // Combine with --case-sensitive, should not match due to case mismatch.
+    te.assert_output(&["--exact", "--case-sensitive", "download (1).tar.gz"], "");
+
+    // Combine with --case-sensitive, exact match should match.
+    te.assert_output(
+        &["--exact", "--case-sensitive", "Download (1).tar.gz"],
+        "test2/Download (1).tar.gz",
+    );
 }
 
 /// Filenames with invalid UTF-8 sequences

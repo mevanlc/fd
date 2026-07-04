@@ -25,7 +25,7 @@ use crate::value_help::{self, OrHelp};
 #[command(
     name = "fd",
     version,
-    about = "A program to find entries in your filesystem",
+    about = "A program to find entries in your filesystem with regex and glob based matching. By default, fd respects gitignore rules, ignores hidden directories, and is case insensitive.",
     after_help = "Many options accept 'help' as a value for details on their syntax (e.g. 'fd -S help').",
     after_long_help = "Many options with non-obvious value syntax (-t, -S, -R, -x, -X, --changed-within, \
                        --changed-before, --summarize, --bash, --prune-if, --exclude-if) accept the literal \
@@ -109,6 +109,7 @@ pub struct Opts {
 
     /// Show search results from files and directories that would otherwise be
     /// ignored by '.gitignore', '.ignore', or '.fdignore' files in parent directories.
+    /// The flag can be overridden with --ignore-parent.
     #[arg(
         long,
         hide_short_help = true,
@@ -116,6 +117,10 @@ pub struct Opts {
         long_help
     )]
     pub no_ignore_parent: bool,
+
+    /// Overrides --no-ignore-parent
+    #[arg(long, overrides_with = "no_ignore_parent", hide = true, action = ArgAction::SetTrue)]
+    ignore_parent: (),
 
     /// Do not respect the global ignore file
     #[arg(long, hide = true)]
@@ -175,7 +180,7 @@ pub struct Opts {
 
     /// Treat the pattern as a literal string instead of a regular expression. Note
     /// that this also performs substring comparison. If you want to match on an
-    /// exact filename, consider using '--glob'.
+    /// exact filename, consider using '--glob' or '--exact' instead.
     #[arg(
         long,
         short = 'F',
@@ -194,11 +199,24 @@ pub struct Opts {
     /// extension).
     #[arg(
         long,
-        conflicts_with_all(&["glob", "regex", "fixed_strings"]),
+        conflicts_with_all(&["glob", "regex", "fixed_strings", "exact"]),
         help = "Bash conditional expression search",
         long_help
     )]
     pub bash: bool,
+
+    /// Perform an exact match. This is equivalent to '--fixed-strings' but requires
+    /// the pattern to match the entire filename (or path if '--full-path' is used),
+    /// rather than a substring. Special regex characters in the pattern are treated
+    /// as literal characters.
+    #[arg(
+        long,
+        conflicts_with_all(["glob", "fixed_strings"]),
+        hide_short_help = true,
+        help = "Match the entire filename exactly (literal, non-substring)",
+        long_help
+    )]
+    pub exact: bool,
 
     /// Add additional required search patterns, all of which must be matched. Multiple
     /// additional patterns can be specified. The patterns are regular
@@ -340,7 +358,7 @@ pub struct Opts {
     #[arg(
         long,
         short = 'E',
-        value_name = "pattern",
+        value_name = "glob",
         help = "Exclude entries that match the given glob pattern",
         long_help
     )]
@@ -480,8 +498,9 @@ pub struct Opts {
     )]
     pub filetype: Option<Vec<FileType>>,
 
-    /// (Additionally) filter search results by their file extension. Multiple
-    /// allowable file extensions can be specified.
+    /// Filter results by extension. By default, this matches all entry types
+    /// (including directories whose names end with the extension). Use `--type`
+    /// to restrict the search to specific types. Multiple extensions can be specified.
     ///
     /// If you want to search for files without extension,
     /// you can use the regex '^[^.]+$' as a normal search pattern.
@@ -489,7 +508,7 @@ pub struct Opts {
         long = "extension",
         short = 'e',
         value_name = "ext",
-        help = "Filter by file extension",
+        help = "Filter by extension",
         long_help
     )]
     pub extensions: Option<Vec<String>>,
@@ -855,6 +874,10 @@ impl Opts {
         } else if path == Path::new(".") {
             // Change "." to "./" as a workaround for https://github.com/BurntSushi/ripgrep/pull/2711
             PathBuf::from("./")
+        } else if path == Path::new("-") {
+            // Prefix "-" so the underlying walker treats it as a path.
+            // See sharkdp/fd#849.
+            Path::new(".").join(path)
         } else {
             path.to_path_buf()
         }
@@ -1029,7 +1052,8 @@ impl clap::Args for Exec {
                     "Execute a command for each search result in parallel (use --threads=1 for sequential command execution). \
                      There is no guarantee of the order commands are executed in, and the order should not be depended upon. \
                      All positional arguments following --exec are considered to be arguments to the command - not to fd. \
-                     It is therefore recommended to place the '-x'/'--exec' option last.\n\
+                     It is therefore recommended to place the '-x'/'--exec' option last. \
+                     Use '\\;' to terminate the command template if you need to continue passing fd arguments afterwards.\n\
                      The following placeholders are substituted before the command is executed:\n  \
                        '{}':   path (of the current search result)\n  \
                        '{/}':  basename\n  \
@@ -1044,6 +1068,8 @@ impl clap::Args for Exec {
                            fd -e zip -x unzip\n\n  \
                        - find *.h and *.cpp files and run \"clang-format -i ..\" for each of them:\n\n      \
                            fd -e h -e cpp -x clang-format -i\n\n  \
+                       - search within `src/` and echo each match (place `-x` last):\n\n      \
+                           fd . src -x echo\n\n  \
                        - Convert all *.jpg files to *.png files:\n\n      \
                            fd -e jpg -x convert {} {.}.png\
                     ",

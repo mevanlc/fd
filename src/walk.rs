@@ -757,14 +757,20 @@ impl WorkerState {
                 }
 
                 if let Ok(e) = &entry {
-                    let entry_path = e.path();
-                    if entry_path.is_dir()
-                        && config
+                    // If the entry is a directory that contains a
+                    // "ignore contain" file", we want to skip this
+                    // directory.
+                    // Check the filetype first to avoid unnecessary
+                    // syscalls.
+                    if e.file_type().is_some_and(|t| t.is_dir()) {
+                        let entry_path = e.path();
+                        if config
                             .ignore_contain
                             .iter()
                             .any(|ic| entry_path.join(ic).exists())
-                    {
-                        return WalkState::Skip;
+                        {
+                            return WalkState::Skip;
+                        }
                     }
                     if e.depth() == 0 {
                         // Skip the root directory entry.
@@ -776,26 +782,16 @@ impl WorkerState {
                     Err(ignore::Error::WithPath {
                         path,
                         err: inner_err,
-                    }) => match inner_err.as_ref() {
-                        ignore::Error::Io(io_error)
-                            if io_error.kind() == io::ErrorKind::NotFound
-                                && path
-                                    .symlink_metadata()
-                                    .ok()
-                                    .is_some_and(|m| m.file_type().is_symlink()) =>
-                        {
-                            DirEntry::broken_symlink(path)
-                        }
-                        _ => {
-                            return match tx.send(WorkerResult::Error(ignore::Error::WithPath {
-                                path,
-                                err: inner_err,
-                            })) {
-                                Ok(_) => WalkState::Continue,
-                                Err(_) => WalkState::Quit,
-                            };
-                        }
-                    },
+                    }) if inner_err
+                        .io_error()
+                        .is_some_and(|io_error| io_error.kind() == io::ErrorKind::NotFound)
+                        && path
+                            .symlink_metadata()
+                            .ok()
+                            .is_some_and(|m| m.file_type().is_symlink()) =>
+                    {
+                        DirEntry::broken_symlink(path)
+                    }
                     Err(err) => {
                         return match tx.send(WorkerResult::Error(err)) {
                             Ok(_) => WalkState::Continue,
@@ -875,20 +871,7 @@ impl WorkerState {
                     }
                 }
 
-                let search_str: Cow<OsStr> = if config.search_full_path {
-                    let path_abs_buf = filesystem::path_absolute_form(entry_path)
-                        .expect("Retrieving absolute path succeeds");
-                    Cow::Owned(path_abs_buf.as_os_str().to_os_string())
-                } else {
-                    match entry_path.file_name() {
-                        Some(filename) => Cow::Borrowed(filename),
-                        None => unreachable!(
-                            "Encountered file system entry without a file name. This should only \
-                             happen for paths like 'foo/bar/..' or '/' which are not supposed to \
-                             appear in a file system traversal."
-                        ),
-                    }
-                };
+                let search_str = search_str_for_entry(entry_path, config.full_path_base.as_deref());
 
                 if !patterns
                     .iter()
@@ -1038,6 +1021,30 @@ impl WorkerState {
     }
 }
 
+fn search_str_for_entry<'a>(
+    entry_path: &'a std::path::Path,
+    full_path_base: Option<&std::path::Path>,
+) -> Cow<'a, OsStr> {
+    if let Some(cwd) = full_path_base {
+        // If full_path_base is some, that means that we need to return
+        // the absolute path
+        if entry_path.is_absolute() {
+            return Cow::Borrowed(entry_path.as_os_str());
+        }
+        let path = entry_path.strip_prefix(".").unwrap_or(entry_path);
+        Cow::Owned(cwd.join(path).into())
+    } else {
+        match entry_path.file_name() {
+            Some(filename) => Cow::Borrowed(filename),
+            None => unreachable!(
+                "Encountered file system entry without a file name. This should only \
+                 happen for paths like 'foo/bar/..' or '/' which are not supposed to \
+                 appear in a file system traversal."
+            ),
+        }
+    }
+}
+
 /// Recursively scan the given search path for files / pathnames matching the patterns.
 ///
 /// If the `--exec` argument was supplied, this will create a thread pool for executing
@@ -1045,4 +1052,61 @@ impl WorkerState {
 /// path will simply be written to standard output.
 pub fn scan(paths: &[PathBuf], patterns: Vec<Regex>, config: Config) -> Result<ExitCode> {
     WorkerState::new(patterns, config).scan(paths)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::search_str_for_entry;
+    use std::path::{Path, PathBuf};
+
+    #[test]
+    fn search_str_for_entry_with_relative_path() {
+        let full_path_base = Some(Path::new("/home/user"));
+        assert_eq!(
+            search_str_for_entry(Path::new("foo/bar"), full_path_base),
+            PathBuf::from("/home/user/foo/bar")
+        );
+    }
+
+    #[test]
+    fn search_str_for_entry_strips_dot_prefix() {
+        let full_path_base = Some(Path::new("/home/user"));
+        assert_eq!(
+            search_str_for_entry(Path::new("./foo/bar"), full_path_base),
+            PathBuf::from("/home/user/foo/bar")
+        );
+    }
+
+    #[test]
+    fn search_str_for_entry_with_absolute_path() {
+        let full_path_base = Some(Path::new("/home/user"));
+        assert_eq!(
+            search_str_for_entry(Path::new("/absolute/path"), full_path_base),
+            PathBuf::from("/absolute/path")
+        );
+    }
+
+    #[test]
+    fn search_str_no_base_dir() {
+        assert_eq!(
+            search_str_for_entry(Path::new("./foo/bar"), None),
+            PathBuf::from("bar")
+        );
+    }
+
+    #[test]
+    fn search_str_no_base_dir_with_plain_relative_path() {
+        assert_eq!(
+            search_str_for_entry(Path::new("foo/bar"), None),
+            PathBuf::from("bar")
+        );
+    }
+
+    #[test]
+    fn search_str_no_base_dir_with_file_in_current_dir() {
+        assert_eq!(
+            search_str_for_entry(Path::new("foo"), None),
+            PathBuf::from("foo")
+        );
+    }
 }
