@@ -15,12 +15,12 @@ use crate::config::Config;
 use crate::dir_entry::DirEntry;
 use crate::filesystem;
 
-pub struct SelectedMatchSets {
-    pub include: Vec<CompiledMatchSet>,
-    pub exclude: Vec<CompiledMatchSet>,
+pub struct SelectedMatchsets {
+    pub include: Vec<CompiledMatchset>,
+    pub exclude: Vec<CompiledMatchset>,
 }
 
-pub struct CompiledMatchSet {
+pub struct CompiledMatchset {
     name: String,
     clauses: Vec<CompiledMatchClause>,
 }
@@ -69,7 +69,7 @@ enum Matcher {
     Bash(bash_cond::Condition),
 }
 
-impl CompiledMatchSet {
+impl CompiledMatchset {
     pub fn matches(&self, entry: &DirEntry, context_dir: &Path, config: &Config) -> Result<bool> {
         for clause in &self.clauses {
             if clause.matches(entry, context_dir, config)? {
@@ -108,7 +108,7 @@ impl EntryType {
             "p" | "pipe" => Ok(Self::Pipe),
             "b" | "block-device" => Ok(Self::BlockDevice),
             "c" | "char-device" => Ok(Self::CharDevice),
-            _ => bail!("invalid match-set entry type '{value}'"),
+            _ => bail!("invalid matchset entry type '{value}'"),
         }
     }
 
@@ -136,7 +136,7 @@ impl Subject {
         match value {
             "name" => Ok(Self::Name),
             "path" => Ok(Self::Path),
-            _ => bail!("invalid match-set subject '{value}'"),
+            _ => bail!("invalid matchset subject '{value}'"),
         }
     }
 
@@ -153,7 +153,7 @@ impl Mode {
         match value {
             "full" => Ok(Self::Full),
             "sub" => Ok(Self::Sub),
-            _ => bail!("invalid match-set mode '{value}'"),
+            _ => bail!("invalid matchset mode '{value}'"),
         }
     }
 }
@@ -165,7 +165,7 @@ impl PatternKind {
             "glob" => Ok(Self::Glob),
             "regex" => Ok(Self::Regex),
             "bash" => Ok(Self::Bash),
-            _ => bail!("invalid match-set pattern kind '{value}'"),
+            _ => bail!("invalid matchset pattern kind '{value}'"),
         }
     }
 }
@@ -173,52 +173,52 @@ impl PatternKind {
 pub fn load_selected(
     include_names: &[String],
     exclude_names: &[String],
-    load_match_sets: bool,
-    no_match_sets: bool,
+    load_matchsets: bool,
+    no_matchsets: bool,
     case_sensitive: bool,
-) -> Result<SelectedMatchSets> {
+) -> Result<SelectedMatchsets> {
     validate_names(include_names)?;
     validate_names(exclude_names)?;
 
-    if no_match_sets {
+    if no_matchsets {
         if include_names.is_empty() && exclude_names.is_empty() {
-            return Ok(SelectedMatchSets {
+            return Ok(SelectedMatchsets {
                 include: Vec::new(),
                 exclude: Vec::new(),
             });
         }
-        bail!("match sets were requested, but --no-match-sets disabled match-set loading");
+        bail!("matchsets were requested, but --no-matchsets disabled matchset loading");
     }
 
-    if !load_match_sets {
-        return Ok(SelectedMatchSets {
+    if !load_matchsets {
+        return Ok(SelectedMatchsets {
             include: Vec::new(),
             exclude: Vec::new(),
         });
     }
 
-    let Some(path) = default_match_sets_path()? else {
+    let Some(path) = default_matchsets_path()? else {
         if include_names.is_empty() && exclude_names.is_empty() {
-            return Ok(SelectedMatchSets {
+            return Ok(SelectedMatchsets {
                 include: Vec::new(),
                 exclude: Vec::new(),
             });
         }
-        bail!("could not determine fd config directory for match sets");
+        bail!("could not determine fd config directory for matchsets");
     };
 
     if !path.is_file() {
         if include_names.is_empty() && exclude_names.is_empty() {
-            return Ok(SelectedMatchSets {
+            return Ok(SelectedMatchsets {
                 include: Vec::new(),
                 exclude: Vec::new(),
             });
         }
-        bail!("match-set file not found: {}", path.display());
+        bail!("matchset file not found: {}", path.display());
     }
 
     let registry = Registry::load(&path, case_sensitive)?;
-    Ok(SelectedMatchSets {
+    Ok(SelectedMatchsets {
         include: registry.select(include_names)?,
         exclude: registry.select(exclude_names)?,
     })
@@ -227,32 +227,32 @@ pub fn load_selected(
 fn validate_names(names: &[String]) -> Result<()> {
     for name in names {
         if name.trim().is_empty() {
-            bail!("match set names must not be empty");
+            bail!("matchset names must not be empty");
         }
     }
     Ok(())
 }
 
-fn default_match_sets_path() -> Result<Option<PathBuf>> {
+fn default_matchsets_path() -> Result<Option<PathBuf>> {
     Ok(etcetera::choose_base_strategy()
         .ok()
-        .map(|base| base.config_dir().join("fd").join("match-sets.kdl")))
+        .map(|base| base.config_dir().join("fd").join("matchsets.kdl")))
 }
 
 struct Registry {
-    sets: HashMap<String, CompiledMatchSet>,
+    sets: HashMap<String, CompiledMatchset>,
 }
 
 impl Registry {
     fn load(path: &Path, case_sensitive: bool) -> Result<Self> {
         let source = fs::read_to_string(path)
-            .with_context(|| format!("could not read match-set file '{}'", path.display()))?;
+            .with_context(|| format!("could not read matchset file '{}'", path.display()))?;
         let document = source
             .parse::<KdlDocument>()
-            .with_context(|| format!("could not parse match-set file '{}'", path.display()))?;
+            .with_context(|| format!("could not parse matchset file '{}'", path.display()))?;
 
         Self::parse(&document, case_sensitive)
-            .with_context(|| format!("invalid match-set file '{}'", path.display()))
+            .with_context(|| format!("invalid matchset file '{}'", path.display()))
     }
 
     fn parse(document: &KdlDocument, case_sensitive: bool) -> Result<Self> {
@@ -261,29 +261,29 @@ impl Registry {
         for node in document.nodes() {
             let name = node.name().value().to_string();
             if name.trim().is_empty() {
-                bail!("match-set names must not be empty");
+                bail!("matchset names must not be empty");
             }
             if sets.contains_key(&name) {
-                bail!("duplicate match set '{name}'");
+                bail!("duplicate matchset '{name}'");
             }
 
             let children = node
                 .children()
-                .ok_or_else(|| anyhow!("match set '{name}' must contain match clauses"))?;
+                .ok_or_else(|| anyhow!("matchset '{name}' must contain match clauses"))?;
             let mut clauses = Vec::new();
             for child in children.nodes() {
                 clauses.extend(parse_clause_group(&name, child, case_sensitive)?);
             }
             if clauses.is_empty() {
-                bail!("match set '{name}' must contain at least one pattern");
+                bail!("matchset '{name}' must contain at least one pattern");
             }
-            sets.insert(name.clone(), CompiledMatchSet { name, clauses });
+            sets.insert(name.clone(), CompiledMatchset { name, clauses });
         }
 
         Ok(Self { sets })
     }
 
-    fn select(&self, names: &[String]) -> Result<Vec<CompiledMatchSet>> {
+    fn select(&self, names: &[String]) -> Result<Vec<CompiledMatchset>> {
         let mut selected = Vec::new();
         let mut seen = HashSet::new();
 
@@ -294,7 +294,7 @@ impl Registry {
             let set = self
                 .sets
                 .get(name)
-                .ok_or_else(|| anyhow!("unknown match set '{name}'"))?;
+                .ok_or_else(|| anyhow!("unknown matchset '{name}'"))?;
             selected.push(set.clone());
         }
 
@@ -302,7 +302,7 @@ impl Registry {
     }
 }
 
-impl Clone for CompiledMatchSet {
+impl Clone for CompiledMatchset {
     fn clone(&self) -> Self {
         Self {
             name: self.name.clone(),
@@ -338,7 +338,7 @@ fn parse_clause_group(
     let atoms = clause_atoms(node)?;
     let (entry_type, subject, pattern_kind, mode) = parse_atoms(set_name, &atoms)?;
     let patterns = clause_patterns(node)
-        .with_context(|| format!("invalid pattern list in match set '{set_name}'"))?;
+        .with_context(|| format!("invalid pattern list in matchset '{set_name}'"))?;
 
     if patterns.is_empty() {
         bail!("match clause in set '{set_name}' must contain at least one pattern");
@@ -348,9 +348,7 @@ fn parse_clause_group(
         .into_iter()
         .map(|pattern| {
             let matcher = compile_matcher(&pattern, pattern_kind, mode, case_sensitive)
-                .with_context(|| {
-                    format!("invalid pattern '{pattern}' in match set '{set_name}'")
-                })?;
+                .with_context(|| format!("invalid pattern '{pattern}' in matchset '{set_name}'"))?;
             Ok(CompiledMatchClause {
                 entry_type,
                 subject,
@@ -381,19 +379,19 @@ fn parse_atoms(
     match atoms {
         [entry_type, pattern_kind] if pattern_kind == "bash" => Ok((
             EntryType::parse(entry_type)
-                .with_context(|| format!("invalid entry type in match set '{set_name}'"))?,
+                .with_context(|| format!("invalid entry type in matchset '{set_name}'"))?,
             Subject::Name,
             PatternKind::Bash,
             Mode::Sub,
         )),
         [entry_type, subject, pattern_kind, mode] => Ok((
             EntryType::parse(entry_type)
-                .with_context(|| format!("invalid entry type in match set '{set_name}'"))?,
+                .with_context(|| format!("invalid entry type in matchset '{set_name}'"))?,
             Subject::parse(subject)
-                .with_context(|| format!("invalid subject in match set '{set_name}'"))?,
+                .with_context(|| format!("invalid subject in matchset '{set_name}'"))?,
             PatternKind::parse(pattern_kind)
-                .with_context(|| format!("invalid pattern kind in match set '{set_name}'"))?,
-            Mode::parse(mode).with_context(|| format!("invalid mode in match set '{set_name}'"))?,
+                .with_context(|| format!("invalid pattern kind in matchset '{set_name}'"))?,
+            Mode::parse(mode).with_context(|| format!("invalid mode in matchset '{set_name}'"))?,
         )),
         _ => bail!(
             "match clause in set '{set_name}' must be '<type> bash' or '<type> <subject> <pattern-kind> <mode>'"
@@ -441,7 +439,7 @@ fn compile_matcher(
             };
             build_regex(&regex, case_sensitive).map(Matcher::Regex)
         }
-        PatternKind::Bash => bash_cond::parse_expr(pattern, "match-set bash")
+        PatternKind::Bash => bash_cond::parse_expr(pattern, "matchset bash")
             .and_then(|expr| bash_cond::Condition::compile(expr, case_sensitive))
             .map(Matcher::Bash),
     }
@@ -471,8 +469,8 @@ mod tests {
     }
 
     #[test]
-    fn parses_pattern_sets_sketch_fixture() {
-        let document = include_str!("../tests/fixtures/matchsets/sketch.kdl")
+    fn parses_matchsets_sketch_fixture() {
+        let document = include_str!("../tests/fixtures/matchsets/matchsets-sketch.kdl")
             .parse::<KdlDocument>()
             .unwrap();
         let registry = Registry::parse(&document, true).unwrap();

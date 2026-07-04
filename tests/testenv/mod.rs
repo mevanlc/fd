@@ -64,7 +64,7 @@ fn create_working_directory(
 
 fn create_config_directory(
     ignore_file_content: Option<&str>,
-    match_sets_content: Option<&str>,
+    matchsets_content: Option<&str>,
 ) -> io::Result<TempDir> {
     let config_dir = tempfile::Builder::new().prefix("fd-config").tempdir()?;
     let fd_dir = config_dir.path().join("fd");
@@ -73,9 +73,9 @@ fn create_config_directory(
         let mut ignore_file = fs::File::create(fd_dir.join("ignore"))?;
         ignore_file.write_all(ignore_file_content.as_bytes())?;
     }
-    if let Some(match_sets_content) = match_sets_content {
-        let mut match_sets_file = fs::File::create(fd_dir.join("match-sets.kdl"))?;
-        match_sets_file.write_all(match_sets_content.as_bytes())?;
+    if let Some(matchsets_content) = matchsets_content {
+        let mut matchsets_file = fs::File::create(fd_dir.join("matchsets.kdl"))?;
+        matchsets_file.write_all(matchsets_content.as_bytes())?;
     }
 
     Ok(config_dir)
@@ -184,7 +184,7 @@ impl TestEnv {
         }
     }
 
-    pub fn match_sets_file(self, content: &str) -> TestEnv {
+    pub fn matchsets_file(self, content: &str) -> TestEnv {
         let config_dir = create_config_directory(None, Some(content)).expect("config directory");
         TestEnv {
             config_dir: Some(config_dir),

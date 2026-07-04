@@ -58,8 +58,8 @@ The optimized cases also kept the same output hashes as their baseline equivalen
 After installing `hyperfine`, continued the same optimization lane:
 
 - `Condition` is now recursive for `&&`, `||`, and `!`, so fast subtrees can short-circuit before generic subtrees.
-- `--prune-if`, `--exclude-if`, and match-set `bash` clauses now use the same compiled condition representation as `--bash`.
-- `devdocs/bench-fd-bash.sh` now generates a benchmark `match-sets.kdl` and includes a `match-set-bash` row.
+- `--prune-if`, `--exclude-if`, and matchset `bash` clauses now use the same compiled condition representation as `--bash`.
+- `devdocs/bench-fd-bash.sh` now generates a benchmark `matchsets.kdl` and includes a `matchset-bash` row.
 
 Hyperfine evidence on the synthetic corpus, 5 runs, 1 warmup:
 
@@ -73,11 +73,11 @@ Hyperfine evidence on the synthetic corpus, 5 runs, 1 warmup:
 | `bash-file-test` | 17.2ms | 29.7ms | 88.8ms | still generic file-test path |
 | `bash-mixed` | 16.5ms | 20.4ms | 90.1ms | recursive fast/generic condition tree |
 | `exclude-if-target` | 15.7ms | 15.6ms | 88.4ms | optimized |
-| `match-set-bash` | 17.0ms | 13.5ms | 90.6ms | optimized plus config load |
+| `matchset-bash` | 17.0ms | 13.5ms | 90.6ms | optimized plus config load |
 | `native-glob-t1` | 18.4ms | 5.6ms | 12.9ms | single-thread baseline |
 | `bash-name-eq-t1` | 18.1ms | 5.6ms | 12.7ms | optimized |
 
-Intermediate hyperfine measurements before the recursive/exclude/match-set continuation had `bash-mixed` at 26.5ms and `exclude-if-target` at 24.0ms on the same harness shape.
+Intermediate hyperfine measurements before the recursive/exclude/matchset continuation had `bash-mixed` at 26.5ms and `exclude-if-target` at 24.0ms on the same harness shape.
 
 ## Current Hot Path
 
@@ -86,7 +86,7 @@ Relevant `fd` paths:
 - `src/main.rs` parses `--bash` expressions once with `bash_cond::parse_expr`.
 - `src/walk.rs` evaluates every selected bash expression for each candidate entry.
 - `src/bash_cond.rs` builds a fresh `MapEnv` and `ContextFs` for each entry, then calls `bash_condexp::Evaluator`.
-- `src/match_sets.rs` can also evaluate bash clauses through the same helper.
+- `src/matchsets.rs` can also evaluate bash clauses through the same helper.
 
 Relevant `bash-condexp` paths:
 
@@ -174,7 +174,7 @@ Minimum benchmark matrix:
 | `--bash '-f ${}'` | file-test / metadata reuse candidate |
 | `--bash '${/} == *.rs && -f ${}'` | mixed string + filesystem candidate |
 | `--exclude-if '${/} = target'` | pruning/exclusion path still works |
-| match-set bash clause | no regression in `src/match_sets.rs` users |
+| matchset bash clause | no regression in `src/matchsets.rs` users |
 
 Acceptance gates:
 
@@ -255,7 +255,7 @@ Work in `../bash-condexp`:
 
 Work in `fd`:
 
-- Parse `--bash`, `--prune-if`, `--exclude-if`, and match-set bash clauses into the compiled representation when available.
+- Parse `--bash`, `--prune-if`, `--exclude-if`, and matchset bash clauses into the compiled representation when available.
 - Keep a fallback path for uncompiled/dynamic forms.
 
 Correctness checks:
@@ -345,7 +345,7 @@ Correctness checks:
 Expected payoff:
 
 - Lower sys time for file-test-heavy expressions.
-- Better combined performance for match-set bash clauses that mix type/name/file sidecar checks.
+- Better combined performance for matchset bash clauses that mix type/name/file sidecar checks.
 
 Cull rule:
 
@@ -410,29 +410,29 @@ Cull rule:
 
 - Drop if changes are too hard to reason about or benchmark gains are lost in noise.
 
-## Experiment 8: Match-Set Bash Clause Integration
+## Experiment 8: Matchset Bash Clause Integration
 
-Hypothesis: any accepted `--bash` optimization should also benefit bash clauses in `match-sets.kdl`.
+Hypothesis: any accepted `--bash` optimization should also benefit bash clauses in `matchsets.kdl`.
 
 Work in `fd`:
 
 - Store the same optimized/compiled predicate type for `Matcher::Bash`.
-- Ensure include and exclude match sets use the same context rules as `--bash`, `--exclude-if`, and `--prune-if`.
-- Benchmark a match set with a bash clause equivalent to the seed expression.
+- Ensure include and exclude matchsets use the same context rules as `--bash`, `--exclude-if`, and `--prune-if`.
+- Benchmark a matchset with a bash clause equivalent to the seed expression.
 
 Correctness checks:
 
-- Existing match-set tests.
-- Add one test proving a bash match-set clause uses optimized behavior without changing output.
+- Existing matchset tests.
+- Add one test proving a bash matchset clause uses optimized behavior without changing output.
 
 Expected payoff:
 
 - Avoids two divergent bash execution paths.
-- Makes match-set performance acceptable for config-heavy workflows.
+- Makes matchset performance acceptable for config-heavy workflows.
 
 Cull rule:
 
-- If match-set integration introduces complexity before the core `--bash` path is proven, defer it. Do not leave a second slow path permanently if the core optimization lands.
+- If matchset integration introduces complexity before the core `--bash` path is proven, defer it. Do not leave a second slow path permanently if the core optimization lands.
 
 ## Cross-Repo Staging
 
@@ -456,8 +456,8 @@ cargo fmt
 cargo check
 cargo test test_bash_search
 cargo test test_bash_search_empty_path_file_test
-cargo test test_match_sets_include_entries
-cargo test test_match_sets_exclude_entries_and_prune_dirs
+cargo test test_matchsets_include_entries
+cargo test test_matchsets_exclude_entries_and_prune_dirs
 cargo test
 ```
 

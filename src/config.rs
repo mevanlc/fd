@@ -10,7 +10,7 @@ use crate::filetypes::FileTypes;
 use crate::filter::OwnerFilter;
 use crate::filter::{SizeFilter, TimeFilter};
 use crate::fmt::FormatTemplate;
-use crate::match_sets::CompiledMatchSet;
+use crate::matchsets::CompiledMatchset;
 use crate::summarize::SummarizeSpec;
 
 /// Configuration options for *fd*.
@@ -70,11 +70,11 @@ pub struct Config {
     /// Bash conditional expression that excludes matching entries.
     pub exclude_if: Option<Condition>,
 
-    /// Match sets that include matching entries.
-    pub include_match_sets: Vec<CompiledMatchSet>,
+    /// Matchsets that include matching entries.
+    pub include_matchsets: Vec<CompiledMatchset>,
 
-    /// Match sets that exclude matching entries.
-    pub exclude_match_sets: Vec<CompiledMatchSet>,
+    /// Matchsets that exclude matching entries.
+    pub exclude_matchsets: Vec<CompiledMatchset>,
 
     /// The number of threads to use.
     pub threads: usize,

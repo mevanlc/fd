@@ -7,9 +7,9 @@ every capability `f` provides is available natively, while `fd`'s default behavi
 untouched. When everything lands, `f` itself shrinks to a trivial wrapper that only
 remaps its single-letter grammar onto native fd flags.
 
-Naming note: what earlier discussion called "patternsets" is what this repo calls
-**match sets** (see `PLAN-MATCH-SETS.md`, which standardized the term and the
-`match-sets.kdl` filename). This plan continues that convention.
+Naming note: this repo uses the one-word term **matchsets** (see
+`PLAN-MATCHSETS.md`, which standardized the term and the `matchsets.kdl`
+filename). This plan continues that convention.
 
 ## The Invariant
 
@@ -26,9 +26,9 @@ fd -g '*' dir
 
 Consequences:
 
-- No config file is read unless a match-set flag is present on the command line.
-  A malformed `~/.config/fd/match-sets.kdl` must not break a plain `fd` run.
-- Built-in match sets are compiled in but inert until selected.
+- No config file is read unless a matchset flag is present on the command line.
+  A malformed `~/.config/fd/matchsets.kdl` must not break a plain `fd` run.
+- Built-in matchsets are compiled in but inert until selected.
 - All new behavior is strictly opt-in via new flags or new flag values.
 
 ## Where Things Stand
@@ -41,7 +41,7 @@ merge-base `40d8eb3`):
 | `-P` prune-if (vendored scanner) | **Done, superseded** — native `--bash`, `--prune-if`, `--exclude-if` (`src/bash_cond.rs`) plus predicate optimizations |
 | `-R` metadata sort with mini-help syntax | **Done** — `--sort`/`-R` redesign (`parse_sort` in `src/cli.rs`) |
 | `-l` list details | **Done** — internal long-listing, ls-like timestamps, works with `-a` |
-| Default exclusion "seams" (vcs, metadata) | **Partially done** — match sets exist (`src/match_sets.rs`, `-m`/`-M`) but no built-ins ship yet |
+| Default exclusion "seams" (vcs, metadata) | **Partially done** — matchsets exist (`src/matchsets.rs`, `-m`/`-M`) but no built-ins ship yet |
 | `-w` AND patterns | **Already upstream** — `--and` |
 | `-Q` single result | **Already upstream** — `-1`/`--max-one-result` |
 | `-N` non-empty | **Already upstream** — `-S +1b` |
@@ -49,12 +49,12 @@ merge-base `40d8eb3`):
 | Postfix flags (`f pattern -f`) | **Already works** — clap parses interspersed options |
 | `--arg help` mini-helps (`-t`, `-S`, `-A`, `-B`, `-R`, `-x`, `-X`) | **Not started** — Workstream 2 |
 
-Remaining work is four streams: finish match sets, add mini-helps, build the invariance
+Remaining work is four streams: finish matchsets, add mini-helps, build the invariance
 test net, then rewrite `f` as a thin wrapper.
 
 ---
 
-## Workstream 1: Finish Match Sets
+## Workstream 1: Finish Matchsets
 
 The registry, KDL parsing, `-m`/`-M` selection, and walk integration (include filter,
 exclude filter with directory pruning) already work. What's missing is the part the
@@ -69,19 +69,19 @@ Selection (existing, unchanged):
                                       matching directories are pruned
 
 Registry (new / revised):
-      --match-set-file <path>         load sets from a KDL file (repeatable)
-      --no-user-match-sets            skip the user match-set file
-      --list-match-sets               load everything, print available sets
+      --matchset-file <path>         load sets from a KDL file (repeatable)
+      --no-user-matchsets            skip the user matchset file
+      --list-matchsets               load everything, print available sets
                                       with provenance and clause summaries, exit
 ```
 
 Terminology: `~/.config/fd/*` is the **user configuration space**; the file it holds
-for this feature is the **user match-set file**. Docs and flag names say "user", not
+for this feature is the **user matchset file**. Docs and flag names say "user", not
 "well-known".
 
-`--match-sets` (the current explicit "load and validate" toggle) is retired:
-`--list-match-sets` covers its only real use (validating the config), and keeping both
-invites confusion between `--match-sets` and `--match-set-file`. This is a
+`--matchsets` (the current explicit "load and validate" toggle) is retired:
+`--list-matchsets` covers its only real use (validating the config), and keeping both
+invites confusion between `--matchsets` and `--matchset-file`. This is a
 fork-internal rename; nothing has shipped.
 
 ### Registry layering
@@ -89,40 +89,40 @@ fork-internal rename; nothing has shipped.
 Three sources, later shadows earlier **by set name**:
 
 1. **Built-ins** (compiled into the binary)
-2. **User match-set file** `~/.config/fd/match-sets.kdl` (via `etcetera`
+2. **User matchset file** `~/.config/fd/matchsets.kdl` (via `etcetera`
    `choose_base_strategy`, so `$XDG_CONFIG_HOME` works on every non-Windows platform)
-3. **`--match-set-file` files**, in command-line order
+3. **`--matchset-file` files**, in command-line order
 
 Shadowing rather than collision errors: it mirrors gitconfig/PATH layering, and it lets
-a user redefine `vcs` without needing an escape hatch. `--list-match-sets` prints
+a user redefine `vcs` without needing an escape hatch. `--list-matchsets` prints
 provenance so shadowing is visible:
 
 ```text
 NAME       SOURCE                                    CLAUSES
-vcs        builtin (shadowed by user match-sets.kdl) 4 dir-name literals
+vcs        builtin (shadowed by user matchsets.kdl) 4 dir-name literals
 package    builtin                                   2 dir-name literals
-mystuff    --match-set-file ./sets.kdl               1 dir bash
+mystuff    --matchset-file ./sets.kdl               1 dir bash
 ```
 
 Loading stays lazy: the registry is only assembled when `-m`, `-M`,
-`--match-set-file`, or `--list-match-sets` appears. Built-ins are static data with no
+`--matchset-file`, or `--list-matchsets` appears. Built-ins are static data with no
 startup cost when unselected.
 
-### `--no-match-sets` → `--no-user-match-sets`
+### `--no-matchsets` → `--no-user-matchsets`
 
-The flag is renamed and rescoped: it means "don't read the user match-set file"
-(analogous to `--no-ignore`), **not** "disable match sets entirely". Built-ins and
-explicit `--match-set-file` files remain available, so
-`fd --no-user-match-sets -M vcs` works even when the user match-set file is broken —
+The flag is renamed and rescoped: it means "don't read the user matchset file"
+(analogous to `--no-ignore`), **not** "disable matchsets entirely". Built-ins and
+explicit `--matchset-file` files remain available, so
+`fd --no-user-matchsets -M vcs` works even when the user matchset file is broken —
 that's the escape hatch a wrapper script wants. This replaces the current
-`--no-match-sets` flag and its hard error in `match_sets::load_selected` ("match sets
-were requested, but --no-match-sets disabled match-set loading"), plus its test in
+`--no-matchsets` flag and its hard error in `matchsets::load_selected` ("matchsets
+were requested, but --no-matchsets disabled matchset loading"), plus its test in
 `tests/tests.rs`.
 
 ### Built-in sets
 
 The built-in registry is the taxonomy in
-`tests/fixtures/match_sets/pattern-sets-sketch.kdl` (decided 2026-07-03):
+`tests/fixtures/matchsets/matchsets-sketch.kdl` (decided 2026-07-03):
 
 ```kdl
 "vcs"          { dir name literal full { ".git"; ".svn"; ".hg"; ".bzr" } }
@@ -149,15 +149,15 @@ becomes the shipped source of truth (move it under `src/` or reference it from t
 
 ### Implementation notes
 
-- `src/match_sets.rs`: split `load_selected` into "assemble registry from
-  (builtins, user file, `--match-set-file` files)" and "select names"; add provenance
-  to each set for `--list-match-sets`; keep per-name shadowing at insert time.
-- `src/cli.rs`: add `match_set_files: Vec<PathBuf>` and `list_match_sets: bool`;
-  remove `load_match_sets`; rename `no_match_sets` to `no_user_match_sets`.
-  `parse_match_set_name` stays as-is: `help` is a legitimate set name (no `-m help`
+- `src/matchsets.rs`: split `load_selected` into "assemble registry from
+  (builtins, user file, `--matchset-file` files)" and "select names"; add provenance
+  to each set for `--list-matchsets`; keep per-name shadowing at insert time.
+- `src/cli.rs`: add `matchset_files: Vec<PathBuf>` and `list_matchsets: bool`;
+  remove `load_matchsets`; rename `no_matchsets` to `no_user_matchsets`.
+  `parse_matchset_name` stays as-is: `help` is a legitimate set name (no `-m help`
   mini-help; see Workstream 2).
 - `src/main.rs`: trigger registry load on any of the four flags; handle
-  `--list-match-sets` before `construct_config` and exit 0.
+  `--list-matchsets` before `construct_config` and exit 0.
 
 ---
 
@@ -176,8 +176,8 @@ cheat-sheet. Port the convention to fd for the options with non-obvious value sy
 | `--summarize` | summary-spec grammar, `fext` options |
 | `--bash` / `--prune-if` / `--exclude-if` | condexp variables and operators |
 
-Explicitly **not** `-m`/`-M`: `help` is a plausible match-set name, and the workaround
-for discoverability is easy — `--list-match-sets`, `--help`, or the man page.
+Explicitly **not** `-m`/`-M`: `help` is a plausible matchset name, and the workaround
+for discoverability is easy — `--list-matchsets`, `--help`, or the man page.
 (Decided 2026-07-03.)
 
 ### Mechanism
@@ -204,13 +204,13 @@ format details") rather than repeating it per-option.
 
 ## Workstream 3: Invariance Test Net
 
-Match sets are opt-in by design — nothing loads without `-m`, `-M`,
-`--match-set-file`, or `--list-match-sets` — so the base cases should hold trivially.
+Matchsets are opt-in by design — nothing loads without `-m`, `-M`,
+`--matchset-file`, or `--list-matchsets` — so the base cases should hold trivially.
 These tests are regression guards, locking that property in before the remaining
 features churn the surface:
 
 - **Config isolation test**: point `XDG_CONFIG_HOME` at a directory containing a
-  deliberately malformed `match-sets.kdl`; assert each of the five base invocations
+  deliberately malformed `matchsets.kdl`; assert each of the five base invocations
   succeeds with output identical to a run with no config at all. This is the test that
   proves lazy loading (`etcetera`'s base strategy honors `XDG_CONFIG_HOME` on macOS and
   Linux; gate the test off Windows or set the Known Folder equivalent).
@@ -278,7 +278,7 @@ Alternatives considered for "the f experience" and rejected:
   invite "which flags does the preset expand to at which precedence" questions.
 - **Config-file default args**: violates the invariant in spirit (base-case output
   becomes machine-dependent) and diverges from upstream fd's no-config philosophy more
-  than the on-demand `match-sets.kdl` does.
+  than the on-demand `matchsets.kdl` does.
 
 The wrapper keeps `f`'s real value — a different *grammar*, not different capabilities —
 while fd stays pure.
@@ -287,27 +287,27 @@ while fd stays pure.
 
 ## Workstream 5: Docs and Release Hygiene
 
-- README: match-set section (concept, KDL format, built-ins, layering, examples),
+- README: matchset section (concept, KDL format, built-ins, layering, examples),
   mini-help convention, one-line pointer from the `--exclude` docs to `-M`, and an
   f-style alias / shell-function suggestion (Workstream 4).
 - Man page (`doc/fd.1`): new flags and the `help`-value convention.
 - Shell completions: regenerate; consider completing built-in set names for `-m`/`-M`.
-- CHANGELOG: entries for match-set built-ins/files/listing, mini-helps, and the
-  renames `--match-sets` → `--list-match-sets`, `--no-match-sets` →
-  `--no-user-match-sets`.
-- Delete or fold `PLAN-MATCH-SETS.md`'s open-decisions section into this doc once
+- CHANGELOG: entries for matchset built-ins/files/listing, mini-helps, and the
+  renames `--matchsets` → `--list-matchsets`, `--no-matchsets` →
+  `--no-user-matchsets`.
+- Delete or fold `PLAN-MATCHSETS.md`'s open-decisions section into this doc once
   Workstream 1 resolves them.
 
 ---
 
 ## Decision Log (2026-07-03)
 
-- Terminology is **match sets**; `~/.config/fd/*` is the **user configuration space**.
+- Terminology is **matchsets**; `~/.config/fd/*` is the **user configuration space**.
 - `-m/--match`, `-M/--exclude-match`, registry layering with name shadowing: as
   specified above.
-- `--no-match-sets` becomes `--no-user-match-sets`.
-- `--list-match-sets` subsumes `--match-sets`'s validate role; `--match-sets` retired.
-- Built-ins = the `pattern-sets-sketch.kdl` taxonomy (not the minimal f-exclusions
+- `--no-matchsets` becomes `--no-user-matchsets`.
+- `--list-matchsets` subsumes `--matchsets`'s validate role; `--matchsets` retired.
+- Built-ins = the `matchsets-sketch.kdl` taxonomy (not the minimal f-exclusions
   pair).
 - `-m help` / `-M help`: **will not implement** — `help` is a plausible set name.
 - The f experience stays out of fd core: contrib script and/or documented alias.
@@ -316,7 +316,7 @@ while fd stays pure.
 
 1. **`.venv` placement**: the sketch omits it, but `f` excluded it by default.
    Recommendation: add `".venv"` to the built-in `package` set (see Workstream 1).
-2. **Case sensitivity of match-set patterns** currently follows global `-s`/`-i`/smart
+2. **Case sensitivity of matchset patterns** currently follows global `-s`/`-i`/smart
    case at compile time — revisit soon (parked 2026-07-03). Current recommendation:
    keep, consistent with search patterns.
 3. **Set composition syntax** (`use "vcs"` inside a set, enabling umbrella sets like
@@ -324,9 +324,9 @@ while fd stays pure.
 
 ## Milestones
 
-1. **M1 — Match sets complete**: built-ins (sketch taxonomy), `--match-set-file`,
-   `--list-match-sets`, `--no-user-match-sets` rename/rescope, provenance, shadowing.
-   Tests: embedded-KDL parse, layering/shadowing, `--no-user-match-sets` + builtin
+1. **M1 — Matchsets complete**: built-ins (sketch taxonomy), `--matchset-file`,
+   `--list-matchsets`, `--no-user-matchsets` rename/rescope, provenance, shadowing.
+   Tests: embedded-KDL parse, layering/shadowing, `--no-user-matchsets` + builtin
    selection, listing output.
 2. **M2 — Invariance net** (small; can precede or interleave with M1): config-isolation
    test, named base-case goldens.

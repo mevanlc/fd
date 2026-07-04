@@ -1,4 +1,4 @@
-// Original pattern-set sketch, adapted to valid match-set KDL fixture syntax.
+// Original matchset sketch, adapted to valid matchset KDL fixture syntax.
 
 "vcs" {
     dir name literal full {

@@ -10,7 +10,7 @@ mod filetypes;
 mod filter;
 mod fmt;
 mod hyperlink;
-mod match_sets;
+mod matchsets;
 mod output;
 mod regex_helper;
 mod summarize;
@@ -262,11 +262,11 @@ fn construct_config(
         .map(|expr| bash_cond::Condition::compile(expr, case_sensitive))
         .transpose()?;
 
-    let selected_match_sets = match_sets::load_selected(
-        &opts.match_sets,
-        &opts.exclude_match_sets,
-        opts.load_match_sets || !(opts.match_sets.is_empty() && opts.exclude_match_sets.is_empty()),
-        opts.no_match_sets,
+    let selected_matchsets = matchsets::load_selected(
+        &opts.matchsets,
+        &opts.exclude_matchsets,
+        opts.load_matchsets || !(opts.matchsets.is_empty() && opts.exclude_matchsets.is_empty()),
+        opts.no_matchsets,
         case_sensitive,
     )?;
 
@@ -336,8 +336,8 @@ fn construct_config(
         bash_patterns,
         prune_if,
         exclude_if,
-        include_match_sets: selected_match_sets.include,
-        exclude_match_sets: selected_match_sets.exclude,
+        include_matchsets: selected_matchsets.include,
+        exclude_matchsets: selected_matchsets.exclude,
         threads: opts.threads().get(),
         max_buffer_time: opts.max_buffer_time,
         sort,

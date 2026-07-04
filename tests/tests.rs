@@ -1279,7 +1279,7 @@ fn test_exclude_if_file_parent_context() {
 }
 
 #[test]
-fn test_match_sets_include_entries() {
+fn test_matchsets_include_entries() {
     let te = TestEnv::new(
         &["node_modules", ".venv", "src"],
         &[
@@ -1289,7 +1289,7 @@ fn test_match_sets_include_entries() {
             "src/main.rs",
         ],
     )
-    .match_sets_file(include_str!("fixtures/matchsets/f-exclusions.kdl"));
+    .matchsets_file(include_str!("fixtures/matchsets/f-exclusions.kdl"));
 
     te.assert_output(
         &["--hidden", "--no-ignore", "--match", "metadata", "."],
@@ -1300,7 +1300,7 @@ fn test_match_sets_include_entries() {
 }
 
 #[test]
-fn test_match_sets_exclude_entries_and_prune_dirs() {
+fn test_matchsets_exclude_entries_and_prune_dirs() {
     let te = TestEnv::new(
         &["node_modules", ".venv", "src"],
         &[
@@ -1310,7 +1310,7 @@ fn test_match_sets_exclude_entries_and_prune_dirs() {
             "src/main.rs",
         ],
     )
-    .match_sets_file(include_str!("fixtures/matchsets/f-exclusions.kdl"));
+    .matchsets_file(include_str!("fixtures/matchsets/f-exclusions.kdl"));
 
     te.assert_output(
         &["--hidden", "--exclude-match", "metadata", "main"],
@@ -1320,9 +1320,9 @@ fn test_match_sets_exclude_entries_and_prune_dirs() {
 }
 
 #[test]
-fn test_match_sets_include_is_or_across_sets() {
+fn test_matchsets_include_is_or_across_sets() {
     let te = TestEnv::new(&["node_modules", "src"], &[".DS_Store", "src/main.rs"])
-        .match_sets_file(include_str!("fixtures/matchsets/f-exclusions.kdl"));
+        .matchsets_file(include_str!("fixtures/matchsets/f-exclusions.kdl"));
 
     te.assert_output(
         &["--hidden", "--no-ignore", "-m", "metadata,vcs", "."],
@@ -1333,13 +1333,13 @@ fn test_match_sets_include_is_or_across_sets() {
 }
 
 #[test]
-fn test_match_sets_no_match_sets_blocks_requested_sets() {
+fn test_matchsets_no_matchsets_blocks_requested_sets() {
     let te = TestEnv::new(&["node_modules"], &["node_modules/package.json"])
-        .match_sets_file(include_str!("fixtures/matchsets/f-exclusions.kdl"));
+        .matchsets_file(include_str!("fixtures/matchsets/f-exclusions.kdl"));
 
     te.assert_failure_with_error(
-        &["--no-match-sets", "-m", "metadata", "."],
-        "[fd error]: match sets were requested, but --no-match-sets disabled match-set loading",
+        &["--no-matchsets", "-m", "metadata", "."],
+        "[fd error]: matchsets were requested, but --no-matchsets disabled matchset loading",
     );
 }
 

@@ -843,10 +843,10 @@ impl WorkerState {
                     return WalkState::Continue;
                 }
 
-                if !config.include_match_sets.is_empty() {
+                if !config.include_matchsets.is_empty() {
                     let mut matched = false;
-                    for set in &config.include_match_sets {
-                        match set.matches(&entry, context_dir, config) {
+                    for matchset in &config.include_matchsets {
+                        match matchset.matches(&entry, context_dir, config) {
                             Ok(true) => {
                                 matched = true;
                                 break;
@@ -863,8 +863,8 @@ impl WorkerState {
                     }
                 }
 
-                for set in &config.exclude_match_sets {
-                    match set.matches(&entry, context_dir, config) {
+                for matchset in &config.exclude_matchsets {
+                    match matchset.matches(&entry, context_dir, config) {
                         Ok(true) if is_dir => return WalkState::Skip,
                         Ok(true) => return WalkState::Continue,
                         Ok(false) => {}

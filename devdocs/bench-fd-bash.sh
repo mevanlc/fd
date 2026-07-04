@@ -24,7 +24,7 @@ optimization benchmark matrix from devdocs/PLAN-OPTIMIZE-FD--BASH.md.
 Options:
   --no-build              Do not run cargo build --release --locked.
   --corpus PATH           Corpus directory. Defaults to target/fd-bash-bench-corpus.
-  --config PATH           XDG config directory for generated match sets.
+  --config PATH           XDG config directory for generated matchsets.
                           Defaults to target/fd-bash-bench-config.
   --fd PATH               fd binary. Defaults to target/release/fd.
   --runs N                Benchmark runs. Defaults to 10.
@@ -164,7 +164,7 @@ generate_corpus() {
         fi
     done
 
-    cat > "$CONFIG_DIR/fd/match-sets.kdl" <<'KDL'
+    cat > "$CONFIG_DIR/fd/matchsets.kdl" <<'KDL'
 "bench-src" {
     dir bash {
         "${/} = src"
@@ -215,7 +215,7 @@ hash_sorted_output() {
 run_hashes() {
     [[ -d "$CORPUS_DIR" ]] || die "corpus does not exist: $CORPUS_DIR"
 
-    local tool native bash_eq bash_eq2 bash_glob bash_regex file_test exclude_if match_set
+    local tool native bash_eq bash_eq2 bash_glob bash_regex file_test exclude_if matchset
     tool=$(hasher_name)
 
     native=$(hash_sorted_output "$tool" "$FD_BIN" -g src "$CORPUS_DIR")
@@ -225,7 +225,7 @@ run_hashes() {
     bash_regex=$(hash_sorted_output "$tool" "$FD_BIN" --bash -- '${} =~ project-[0-9]+/src/' "$CORPUS_DIR")
     file_test=$(hash_sorted_output "$tool" "$FD_BIN" --bash -- '-f ${}' "$CORPUS_DIR")
     exclude_if=$(hash_sorted_output "$tool" "$FD_BIN" . "$CORPUS_DIR" --exclude-if '${/} = target')
-    match_set=$(hash_sorted_output "$tool" env XDG_CONFIG_HOME="$CONFIG_DIR" "$FD_BIN" --match-sets -m bench-src . "$CORPUS_DIR")
+    matchset=$(hash_sorted_output "$tool" env XDG_CONFIG_HOME="$CONFIG_DIR" "$FD_BIN" --matchsets -m bench-src . "$CORPUS_DIR")
 
     printf '%-24s %s\n' "native -g src" "$native"
     printf '%-24s %s\n' "bash name =" "$bash_eq"
@@ -234,11 +234,11 @@ run_hashes() {
     printf '%-24s %s\n' "bash regex" "$bash_regex"
     printf '%-24s %s\n' "bash -f current" "$file_test"
     printf '%-24s %s\n' "exclude-if target" "$exclude_if"
-    printf '%-24s %s\n' "match-set bash" "$match_set"
+    printf '%-24s %s\n' "matchset bash" "$matchset"
 
     [[ "$native" == "$bash_eq" ]] || die "native -g src and bash '${/} = src' hashes differ"
     [[ "$native" == "$bash_eq2" ]] || die "native -g src and bash '${/} == src' hashes differ"
-    [[ "$native" == "$match_set" ]] || die "native -g src and match-set bash hashes differ"
+    [[ "$native" == "$matchset" ]] || die "native -g src and matchset bash hashes differ"
 }
 
 quote_arg() {
@@ -260,7 +260,7 @@ build_bench_commands() {
         "bash-file-test"
         "bash-mixed"
         "exclude-if-target"
-        "match-set-bash"
+        "matchset-bash"
         "native-glob-t1"
         "bash-name-eq-t1"
     )
@@ -274,7 +274,7 @@ build_bench_commands() {
         "$fd_q --bash -- '-f \${}' $corpus_q > /dev/null"
         "$fd_q --bash -- '\${/} == *.rs && -f \${}' $corpus_q > /dev/null"
         "$fd_q . $corpus_q --exclude-if '\${/} = target' > /dev/null"
-        "env XDG_CONFIG_HOME=$config_q $fd_q --match-sets -m bench-src . $corpus_q > /dev/null"
+        "env XDG_CONFIG_HOME=$config_q $fd_q --matchsets -m bench-src . $corpus_q > /dev/null"
         "$fd_q --threads 1 -g src $corpus_q > /dev/null"
         "$fd_q --threads 1 --bash -- '\${/} = src' $corpus_q > /dev/null"
     )
