@@ -19,13 +19,18 @@ use crate::filesystem;
 use crate::filter::OwnerFilter;
 use crate::filter::SizeFilter;
 use crate::summarize::SummarizeSpec;
+use crate::value_help::{self, OrHelp};
 
 #[derive(Parser)]
 #[command(
     name = "fd",
     version,
     about = "A program to find entries in your filesystem",
-    after_long_help = "Bugs can be reported on GitHub: https://github.com/sharkdp/fd/issues",
+    after_help = "Many options accept 'help' as a value for details on their syntax (e.g. 'fd -S help').",
+    after_long_help = "Many options with non-obvious value syntax (-t, -S, -R, -x, -X, --changed-within, \
+                       --changed-before, --summarize, --bash, --prune-if, --exclude-if) accept the literal \
+                       value 'help' to print a focused cheat-sheet (e.g. 'fd -S help').\n\n\
+                       Bugs can be reported on GitHub: https://github.com/sharkdp/fd/issues",
     max_term_width = 98,
     args_override_self = true,
     group(ArgGroup::new("execs").args(&["exec", "exec_batch", "list_details"]).conflicts_with_all(&[
@@ -247,7 +252,7 @@ pub struct Opts {
         long,
         short = 'R',
         value_name = "mMsS...",
-        value_parser = parse_sort,
+        value_parser = OrHelp::new(parse_sort, value_help::SORT),
         conflicts_with_all(["exec", "exec_batch"]),
         help = "Sort by time or size. Uppercase reverses sort. See --help for more.",
         long_help,
@@ -467,7 +472,7 @@ pub struct Opts {
         short = 't',
         value_name = "filetype",
         hide_possible_values = true,
-        value_enum,
+        value_parser = OrHelp::new(clap::builder::EnumValueParser::<FileType>::new(), value_help::TYPE),
         help = "Filter by type: file (f), directory (d/dir), symlink (l), \
                 executable (x), empty (e), socket (s), pipe (p), \
                 char-device (c), block-device (b)",
@@ -506,7 +511,7 @@ pub struct Opts {
     ///     'mi': mebibytes
     ///     'gi': gibibytes
     ///     'ti': tebibytes
-    #[arg(long, short = 'S', value_parser = SizeFilter::from_string, allow_hyphen_values = true, verbatim_doc_comment, value_name = "size",
+    #[arg(long, short = 'S', value_parser = OrHelp::new(SizeFilter::from_string, value_help::SIZE), allow_hyphen_values = true, verbatim_doc_comment, value_name = "size",
         help = "Limit results based on the size of files",
         long_help,
         verbatim_doc_comment,
@@ -529,6 +534,7 @@ pub struct Opts {
         alias("change-newer-than"),
         alias("newer"),
         alias("changed-after"),
+        value_parser = OrHelp::new(clap::builder::StringValueParser::new(), value_help::TIME),
         value_name = "date|dur",
         help = "Filter by file modification time (newer than)",
         long_help
@@ -548,6 +554,7 @@ pub struct Opts {
         long,
         alias("change-older-than"),
         alias("older"),
+        value_parser = OrHelp::new(clap::builder::StringValueParser::new(), value_help::TIME),
         value_name = "date|dur",
         help = "Filter by file modification time (older than)",
         long_help
@@ -601,7 +608,7 @@ pub struct Opts {
     #[arg(
         long,
         value_name = "summary-spec",
-        value_parser = str::parse::<SummarizeSpec>,
+        value_parser = OrHelp::new(str::parse::<SummarizeSpec>, value_help::SUMMARIZE),
         conflicts_with_all(["execs", "format", "quiet"]),
         help = "Print a summary of the search results",
         long_help,
@@ -981,6 +988,12 @@ pub struct Exec {
 
 impl clap::FromArgMatches for Exec {
     fn from_arg_matches(matches: &ArgMatches) -> clap::error::Result<Self> {
+        // The mini-help escape hatch mirrors f: only a first command token
+        // that is the bare word 'help' triggers it ('-x ./help' still
+        // executes).
+        if command_is_bare_help(matches, "exec") || command_is_bare_help(matches, "exec_batch") {
+            value_help::print_topic_and_exit(value_help::EXEC);
+        }
         let command = matches
             .get_occurrences::<String>("exec")
             .map(CommandSet::new)
@@ -1120,6 +1133,14 @@ fn parse_sort(arg: &str) -> Result<SortExpression, String> {
     }
 
     Ok(SortExpression(SortConfig { criteria, text }))
+}
+
+fn command_is_bare_help(matches: &ArgMatches, id: &str) -> bool {
+    matches
+        .get_occurrences::<String>(id)
+        .and_then(|mut occurrences| occurrences.next())
+        .and_then(|mut command| command.next())
+        .is_some_and(|token| token.as_str() == "help")
 }
 
 fn parse_matchset_name(arg: &str) -> Result<String, String> {

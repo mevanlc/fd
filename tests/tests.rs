@@ -1584,6 +1584,65 @@ fn test_invariant_holds_with_malformed_user_config() {
     assert_invariant_base_cases(&te);
 }
 
+/// Passing the literal value 'help' to a syntax-heavy option prints a
+/// focused cheat-sheet and exits successfully.
+#[test]
+fn test_value_help_topics() {
+    let te = TestEnv::new(DEFAULT_DIRS, DEFAULT_FILES);
+
+    let cases: &[(&[&str], &str)] = &[
+        (&["-t", "help"], "File types"),
+        (&["-S", "help"], "Size filters"),
+        (&["--changed-within", "help"], "Time filters"),
+        (&["--changed-before", "help"], "Time filters"),
+        (&["-R", "help"], "Sort expressions"),
+        (&["--sort", "help"], "Sort expressions"),
+        (&["--summarize", "help"], "Summary specs"),
+        (&["-x", "help"], "Command execution"),
+        (&["-X", "help"], "Command execution"),
+        (&["--bash", "help"], "Bash conditional expressions"),
+        (&["--prune-if", "help"], "Bash conditional expressions"),
+        (&["--exclude-if", "help"], "Bash conditional expressions"),
+    ];
+
+    for (args, marker) in cases {
+        let output = te.assert_success_and_get_output(".", args);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            stdout.contains(marker),
+            "`fd {}` should print the '{marker}' mini-help, got:\n{stdout}",
+            args.join(" ")
+        );
+    }
+}
+
+/// Only the bare word 'help' triggers a mini-help: a program named 'help' is
+/// still reachable via a path, and 'help' works as a search pattern.
+#[cfg(unix)]
+#[test]
+fn test_value_help_bare_word_only() {
+    use std::os::unix::fs::OpenOptionsExt;
+
+    let te = TestEnv::new(&[], &["a.foo"]);
+    fs::OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .mode(0o755)
+        .open(te.test_root().join("help"))
+        .unwrap()
+        .write_all(b"#!/bin/sh\necho ran-help-program\n")
+        .unwrap();
+
+    let output = te.assert_success_and_get_output(".", &["a.foo", "-x", "./help"]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("ran-help-program"),
+        "-x ./help should execute the program, got:\n{stdout}"
+    );
+
+    te.assert_output(&["help"], "help");
+}
+
 #[test]
 fn test_bash_search_parse_error() {
     let te = TestEnv::new(DEFAULT_DIRS, DEFAULT_FILES);

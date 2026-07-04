@@ -14,6 +14,7 @@ mod matchsets;
 mod output;
 mod regex_helper;
 mod summarize;
+mod value_help;
 mod walk;
 
 use std::env;
@@ -109,6 +110,16 @@ fn run() -> Result<ExitCode> {
         .filter(|pat| !pat.is_empty())
         .cloned()
         .collect::<Vec<_>>();
+
+    // The bare value 'help' on the --bash family prints the condexp
+    // cheat-sheet. It must be intercepted before parsing: 'help' is a valid
+    // conditional expression (a non-empty-string test).
+    if (opts.bash && pattern_exprs.iter().any(|expr| expr == "help"))
+        || opts.prune_if.as_deref() == Some("help")
+        || opts.exclude_if.as_deref() == Some("help")
+    {
+        value_help::print_topic_and_exit(value_help::CONDEXP);
+    }
 
     let bash_patterns = if opts.bash {
         pattern_exprs

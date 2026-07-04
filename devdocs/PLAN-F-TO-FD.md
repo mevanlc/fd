@@ -49,7 +49,7 @@ merge-base `40d8eb3`):
 | `-N` non-empty | **Already upstream** — `-S +1b` |
 | Full-path / hidden / no-ignore / ignore-case defaults | **Already upstream as flags** — `-p`, `-H`, `-I` (`-uu`), `-i`; stays opt-in per the invariant |
 | Postfix flags (`f pattern -f`) | **Already works** — clap parses interspersed options |
-| `--arg help` mini-helps (`-t`, `-S`, `-A`, `-B`, `-R`, `-x`, `-X`) | **Not started** — Workstream 2 |
+| `--arg help` mini-helps (`-t`, `-S`, `-A`, `-B`, `-R`, `-x`, `-X`) | **Done** — M3 (2026-07-03): `src/value_help.rs`, `OrHelp` value-parser combinator, post-parse checks for the `--bash` family |
 
 Remaining work is four streams: finish matchsets, add mini-helps, build the invariance
 test net, then rewrite `f` as a thin wrapper.
@@ -473,8 +473,13 @@ while fd stays pure.
    base-case goldens (`test_invariant_*` in `tests/tests.rs`), and the optional
    fork-vs-upstream spot check (`devdocs/check-invariant.sh`; verified clean
    against `40d8eb3`).
-3. **M3 — Mini-helps**: `src/value_help.rs`, `or_help` combinator, post-parse checks.
-   Tests: each topic exits 0 with expected stdout; `-x ./help` still execs.
+3. **M3 — Mini-helps** *(landed 2026-07-03)*: `src/value_help.rs`, `OrHelp`
+   `TypedValueParser` combinator (forwards `possible_values()`, so `-t`
+   completions survive), exec first-token check in `Exec::from_arg_matches`,
+   pre-parse checks for the `--bash` family in `run()` (`help` is a *valid*
+   condexp — a non-empty-string test — so it must be intercepted before
+   parsing). Tests: each topic exits 0 with expected stdout; `-x ./help`
+   still execs; `fd help` still searches.
 4. **M4 — `f` wrapper rewrite** (contrib script and/or `f` repo): translation table
    above, delete vendored scanner, update `test/run.sh` suite, re-run
    `tests/fd_compat` against this fork; add the alias suggestion to the docs.
