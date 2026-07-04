@@ -1289,7 +1289,7 @@ fn test_match_sets_include_entries() {
             "src/main.rs",
         ],
     )
-    .match_sets_file(include_str!("fixtures/match_sets/f-exclusions.kdl"));
+    .match_sets_file(include_str!("fixtures/matchsets/f-exclusions.kdl"));
 
     te.assert_output(
         &["--hidden", "--no-ignore", "--match", "metadata", "."],
@@ -1310,7 +1310,7 @@ fn test_match_sets_exclude_entries_and_prune_dirs() {
             "src/main.rs",
         ],
     )
-    .match_sets_file(include_str!("fixtures/match_sets/f-exclusions.kdl"));
+    .match_sets_file(include_str!("fixtures/matchsets/f-exclusions.kdl"));
 
     te.assert_output(
         &["--hidden", "--exclude-match", "metadata", "main"],
@@ -1322,7 +1322,7 @@ fn test_match_sets_exclude_entries_and_prune_dirs() {
 #[test]
 fn test_match_sets_include_is_or_across_sets() {
     let te = TestEnv::new(&["node_modules", "src"], &[".DS_Store", "src/main.rs"])
-        .match_sets_file(include_str!("fixtures/match_sets/f-exclusions.kdl"));
+        .match_sets_file(include_str!("fixtures/matchsets/f-exclusions.kdl"));
 
     te.assert_output(
         &["--hidden", "--no-ignore", "-m", "metadata,vcs", "."],
@@ -1335,7 +1335,7 @@ fn test_match_sets_include_is_or_across_sets() {
 #[test]
 fn test_match_sets_no_match_sets_blocks_requested_sets() {
     let te = TestEnv::new(&["node_modules"], &["node_modules/package.json"])
-        .match_sets_file(include_str!("fixtures/match_sets/f-exclusions.kdl"));
+        .match_sets_file(include_str!("fixtures/matchsets/f-exclusions.kdl"));
 
     te.assert_failure_with_error(
         &["--no-match-sets", "-m", "metadata", "."],

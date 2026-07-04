@@ -27,6 +27,7 @@
     dir name literal full {
         "node_modules"
         "__pypackages__"
+        ".venv"
     }
 }
 

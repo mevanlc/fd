@@ -461,7 +461,7 @@ mod tests {
 
     #[test]
     fn parses_f_exclusions_fixture() {
-        let document = include_str!("../tests/fixtures/match_sets/f-exclusions.kdl")
+        let document = include_str!("../tests/fixtures/matchsets/f-exclusions.kdl")
             .parse::<KdlDocument>()
             .unwrap();
         let registry = Registry::parse(&document, true).unwrap();
@@ -472,15 +472,15 @@ mod tests {
 
     #[test]
     fn parses_pattern_sets_sketch_fixture() {
-        let document = include_str!("../tests/fixtures/match_sets/pattern-sets-sketch.kdl")
+        let document = include_str!("../tests/fixtures/matchsets/sketch.kdl")
             .parse::<KdlDocument>()
             .unwrap();
         let registry = Registry::parse(&document, true).unwrap();
 
         assert!(registry.sets.contains_key("vcs"));
-        assert!(registry.sets.contains_key("outputs"));
+        assert!(registry.sets.contains_key("build_output"));
         assert!(registry.sets.contains_key("cache"));
-        assert!(registry.sets.contains_key("packages"));
+        assert!(registry.sets.contains_key("package"));
         assert!(registry.sets.contains_key("noise"));
     }
 
