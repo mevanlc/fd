@@ -350,7 +350,7 @@ translation table:
 | `-M` | drop `package,noise` from default `--exclude-matchsets` |
 | `-f` / `-r` / `-b` | `-tf` / `-td` / `-tx` |
 | `-w <pat>` | `--and <pat>` |
-| `-P <cond>` | `--prune-if <cond>` (delete vendored scanner, `tools/`, `vendor/`) |
+| `-P <cond>` | `--exclude-if <cond>` (delete vendored scanner, `tools/`, `vendor/`). `--exclude-if`, not `--prune-if`: old `-P` hid a matching directory entirely (prune paths became `-E` excludes), and that is `--exclude-if`'s directory behavior; `--prune-if` would keep the pruned directory itself in the output. Conditions rewrite from scanner variables (`$path`, `$name`, `$root`, …) to condexp placeholders (`${}`, `${/}`, relative file tests); the root-relative variables (`$root`, `$rpath`, …) have no condexp equivalent and retire with the scanner. |
 | `-A` / `-B` | `--changed-within` / `--changed-before` |
 | `-Q` | `-1` |
 | `-N` | `-S +1b` |
@@ -480,9 +480,15 @@ while fd stays pure.
    condexp — a non-empty-string test — so it must be intercepted before
    parsing). Tests: each topic exits 0 with expected stdout; `-x ./help`
    still execs; `fd help` still searches.
-4. **M4 — `f` wrapper rewrite** (contrib script and/or `f` repo): translation table
-   above, delete vendored scanner, update `test/run.sh` suite, re-run
-   `tests/fd_compat` against this fork; add the alias suggestion to the docs.
+4. **M4 — `f` wrapper rewrite** *(fd half landed 2026-07-03)*: the thin wrapper
+   ships as `contrib/scripts/f` (translation table above; ~290 lines, no vendored
+   scanner, no help text blocks — `help` values forward to fd). Verified against
+   the `f` repo's `test/run.sh` suite: all four grammar tests pass; the four
+   `-P` tests fail on old scanner-variable conditions and need migration.
+   Remaining, in the `f` repo: replace `f`/`f.ps1` with the thin remap, delete
+   `tools/`+`vendor/`, migrate or retire the `test_prune_if_*` conditions
+   (root-relative variables are not expressible in condexp), re-run
+   `tests/fd_compat` against this fork. Alias suggestion in docs: M5.
 5. **M5 — Docs sweep**: README, man page, completions, CHANGELOG.
 
 Validation for every fd milestone:
