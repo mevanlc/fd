@@ -173,51 +173,33 @@ impl PatternKind {
 pub fn load_selected(
     include_names: &[String],
     exclude_names: &[String],
-    load_matchsets: bool,
-    no_matchsets: bool,
+    no_user_matchsets: bool,
     case_sensitive: bool,
 ) -> Result<SelectedMatchsets> {
     validate_names(include_names)?;
     validate_names(exclude_names)?;
 
-    if no_matchsets {
-        if include_names.is_empty() && exclude_names.is_empty() {
-            return Ok(SelectedMatchsets {
-                include: Vec::new(),
-                exclude: Vec::new(),
-            });
-        }
-        bail!("matchsets were requested, but --no-matchsets disabled matchset loading");
-    }
-
-    if !load_matchsets {
+    if include_names.is_empty() && exclude_names.is_empty() {
         return Ok(SelectedMatchsets {
             include: Vec::new(),
             exclude: Vec::new(),
         });
     }
 
-    let Some(path) = default_matchsets_path()? else {
-        if include_names.is_empty() && exclude_names.is_empty() {
-            return Ok(SelectedMatchsets {
-                include: Vec::new(),
-                exclude: Vec::new(),
-            });
+    let registry = if no_user_matchsets {
+        Registry::default()
+    } else {
+        let Some(path) = default_matchsets_path()? else {
+            bail!("could not determine fd config directory for matchsets");
+        };
+
+        if !path.is_file() {
+            bail!("matchset file not found: {}", path.display());
         }
-        bail!("could not determine fd config directory for matchsets");
+
+        Registry::load(&path, case_sensitive)?
     };
 
-    if !path.is_file() {
-        if include_names.is_empty() && exclude_names.is_empty() {
-            return Ok(SelectedMatchsets {
-                include: Vec::new(),
-                exclude: Vec::new(),
-            });
-        }
-        bail!("matchset file not found: {}", path.display());
-    }
-
-    let registry = Registry::load(&path, case_sensitive)?;
     Ok(SelectedMatchsets {
         include: registry.select(include_names)?,
         exclude: registry.select(exclude_names)?,
@@ -239,6 +221,7 @@ fn default_matchsets_path() -> Result<Option<PathBuf>> {
         .map(|base| base.config_dir().join("fd").join("matchsets.kdl")))
 }
 
+#[derive(Default)]
 struct Registry {
     sets: HashMap<String, CompiledMatchset>,
 }

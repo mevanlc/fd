@@ -225,7 +225,7 @@ run_hashes() {
     bash_regex=$(hash_sorted_output "$tool" "$FD_BIN" --bash -- '${} =~ project-[0-9]+/src/' "$CORPUS_DIR")
     file_test=$(hash_sorted_output "$tool" "$FD_BIN" --bash -- '-f ${}' "$CORPUS_DIR")
     exclude_if=$(hash_sorted_output "$tool" "$FD_BIN" . "$CORPUS_DIR" --exclude-if '${/} = target')
-    matchset=$(hash_sorted_output "$tool" env XDG_CONFIG_HOME="$CONFIG_DIR" "$FD_BIN" --matchsets -m bench-src . "$CORPUS_DIR")
+    matchset=$(hash_sorted_output "$tool" env XDG_CONFIG_HOME="$CONFIG_DIR" "$FD_BIN" --matchsets bench-src . "$CORPUS_DIR")
 
     printf '%-24s %s\n' "native -g src" "$native"
     printf '%-24s %s\n' "bash name =" "$bash_eq"
@@ -274,7 +274,7 @@ build_bench_commands() {
         "$fd_q --bash -- '-f \${}' $corpus_q > /dev/null"
         "$fd_q --bash -- '\${/} == *.rs && -f \${}' $corpus_q > /dev/null"
         "$fd_q . $corpus_q --exclude-if '\${/} = target' > /dev/null"
-        "env XDG_CONFIG_HOME=$config_q $fd_q --matchsets -m bench-src . $corpus_q > /dev/null"
+        "env XDG_CONFIG_HOME=$config_q $fd_q --matchsets bench-src . $corpus_q > /dev/null"
         "$fd_q --threads 1 -g src $corpus_q > /dev/null"
         "$fd_q --threads 1 --bash -- '\${/} = src' $corpus_q > /dev/null"
     )

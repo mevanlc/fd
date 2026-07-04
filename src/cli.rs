@@ -376,7 +376,7 @@ pub struct Opts {
 
     /// Include entries that match any of the named matchsets.
     #[arg(
-        long = "match",
+        long = "matchsets",
         short = 'm',
         value_name = "set[,set...]",
         value_delimiter = ',',
@@ -388,7 +388,7 @@ pub struct Opts {
 
     /// Exclude entries that match any of the named matchsets.
     #[arg(
-        long = "exclude-match",
+        long = "exclude-matchsets",
         short = 'M',
         value_name = "set[,set...]",
         value_delimiter = ',',
@@ -398,13 +398,9 @@ pub struct Opts {
     )]
     pub exclude_matchsets: Vec<String>,
 
-    /// Load matchsets from ~/.config/fd/matchsets.kdl.
-    #[arg(long = "matchsets", overrides_with = "no_matchsets")]
-    pub load_matchsets: bool,
-
     /// Do not load matchsets from ~/.config/fd/matchsets.kdl.
-    #[arg(long = "no-matchsets", overrides_with = "load_matchsets")]
-    pub no_matchsets: bool,
+    #[arg(long = "no-user-matchsets")]
+    pub no_user_matchsets: bool,
 
     /// Filter the search by type:
     /// {n}  'f' or 'file':         regular files

@@ -9,7 +9,9 @@ remaps its single-letter grammar onto native fd flags.
 
 Naming note: this repo uses the one-word term **matchsets** (see
 `PLAN-MATCHSETS.md`, which standardized the term and the `matchsets.kdl`
-filename). This plan continues that convention.
+filename). This plan continues that convention. The compound stays one word in every
+casing: `matchsets` in snake_case and flags, `Matchset`/`Matchsets` in CamelCase
+(e.g. `CompiledMatchset`) — never `MatchSet`.
 
 ## The Invariant
 
@@ -63,10 +65,10 @@ original design punted on: built-ins, extra files, and discoverability.
 ### Target CLI surface
 
 ```text
-Selection (existing, unchanged):
-  -m, --match <set[,set...]>          keep only entries matching any named set
-  -M, --exclude-match <set[,set...]>  drop entries matching any named set;
-                                      matching directories are pruned
+Selection (long forms renamed 2026-07-03; shorts unchanged):
+  -m, --matchsets <set[,set...]>          keep only entries matching any named set
+  -M, --exclude-matchsets <set[,set...]>  drop entries matching any named set;
+                                          matching directories are pruned
 
 Registry (new / revised):
       --matchset-file <path>         load sets from a KDL file (repeatable)
@@ -79,10 +81,15 @@ Terminology: `~/.config/fd/*` is the **user configuration space**; the file it h
 for this feature is the **user matchset file**. Docs and flag names say "user", not
 "well-known".
 
-`--matchsets` (the current explicit "load and validate" toggle) is retired:
-`--list-matchsets` covers its only real use (validating the config), and keeping both
-invites confusion between `--matchsets` and `--matchset-file`. This is a
-fork-internal rename; nothing has shipped.
+The long forms are plural (`--matchsets`, not `--matchset`) because the value is a
+comma-separated list of set names (and the flags are repeatable) — same convention as
+cargo's `--features`.
+
+The old boolean `--matchsets` toggle ("load and validate the config") is retired —
+`--list-matchsets` covers its only real use — and its name is **reused** as the
+selection flag's long form (previously `--match`). Retire the toggle and rename the
+selection flags in the same commit, so no intermediate state exists where
+`--matchsets` means two different things. All fork-internal; nothing has shipped.
 
 ### Registry layering
 
@@ -135,7 +142,7 @@ The built-in registry is the taxonomy in
 One gap versus `f`'s seams: `.venv` appears nowhere in the sketch (`f` excluded it by
 default). Recommendation: add `".venv"` to `package` — a virtualenv is installed
 packages, the direct analog of `__pypackages__`. With that, `f`'s default exclusions
-map to `--exclude-match vcs,package,noise` with zero config (the extra
+map to `--exclude-matchsets vcs,package,noise` with zero config (the extra
 `__pypackages__`/`.bzr` coverage is in `f`'s spirit).
 
 Umbrella sets (e.g. an f-style `metadata` grouping) wait for set composition
@@ -151,9 +158,13 @@ becomes the shipped source of truth (move it under `src/` or reference it from t
 
 - `src/matchsets.rs`: split `load_selected` into "assemble registry from
   (builtins, user file, `--matchset-file` files)" and "select names"; add provenance
-  to each set for `--list-matchsets`; keep per-name shadowing at insert time.
-- `src/cli.rs`: add `matchset_files: Vec<PathBuf>` and `list_matchsets: bool`;
-  remove `load_matchsets`; rename `no_matchsets` to `no_user_matchsets`.
+  to each set for `--list-matchsets`; keep per-name shadowing at insert time. Types
+  follow the one-word casing: `CompiledMatchset`, `SelectedMatchsets`, etc. — sweep
+  any remaining `MatchSet`-humped identifiers.
+- `src/cli.rs`: rename the selection long forms (`long = "match"` → `"matchsets"`,
+  `long = "exclude-match"` → `"exclude-matchsets"`); add
+  `matchset_files: Vec<PathBuf>` and `list_matchsets: bool`; remove the old
+  `--matchsets` bool; rename `no_matchsets` to `no_user_matchsets`.
   `parse_matchset_name` stays as-is: `help` is a legitimate set name (no `-m help`
   mini-help; see Workstream 2).
 - `src/main.rs`: trigger registry load on any of the four flags; handle
@@ -237,13 +248,13 @@ translation table:
 
 | `f` | native fd |
 |---|---|
-| (default) | `-uu -p -i --exclude-match vcs,package,noise` |
+| (default) | `-uu -p -i --exclude-matchsets vcs,package,noise` |
 | `-O` | drop `-H` from defaults |
 | `-G` | drop `-I` from defaults |
 | `-n` | drop `-p` from defaults |
 | `-C` | `-s` instead of `-i` |
-| `-V` | drop `vcs` from default `--exclude-match` |
-| `-M` | drop `package,noise` from default `--exclude-match` |
+| `-V` | drop `vcs` from default `--exclude-matchsets` |
+| `-M` | drop `package,noise` from default `--exclude-matchsets` |
 | `-f` / `-r` / `-b` | `-tf` / `-td` / `-tx` |
 | `-w <pat>` | `--and <pat>` |
 | `-P <cond>` | `--prune-if <cond>` (delete vendored scanner, `tools/`, `vendor/`) |
@@ -262,7 +273,7 @@ wrapper as a contrib script (`contrib/f` in this repo, or it stays in the `f` re
 or reduce further to an alias / shell-function suggestion in the docs — e.g.
 
 ```sh
-f() { fd -uu -p -i --exclude-match vcs,package,noise "$@"; }
+f() { fd -uu -p -i --exclude-matchsets vcs,package,noise "$@"; }
 ```
 
 for users who want the defaults but not `f`'s single-letter grammar. The full wrapper
@@ -292,9 +303,10 @@ while fd stays pure.
   f-style alias / shell-function suggestion (Workstream 4).
 - Man page (`doc/fd.1`): new flags and the `help`-value convention.
 - Shell completions: regenerate; consider completing built-in set names for `-m`/`-M`.
-- CHANGELOG: entries for matchset built-ins/files/listing, mini-helps, and the
-  renames `--matchsets` → `--list-matchsets`, `--no-matchsets` →
-  `--no-user-matchsets`.
+- CHANGELOG: feature entries for matchsets (`-m/--matchsets`,
+  `-M/--exclude-matchsets`, built-ins, `--matchset-file`, `--list-matchsets`,
+  `--no-user-matchsets`) and mini-helps. The internal renames need no entries —
+  none of the old spellings ever shipped.
 - Delete or fold `PLAN-MATCHSETS.md`'s open-decisions section into this doc once
   Workstream 1 resolves them.
 
@@ -302,9 +314,11 @@ while fd stays pure.
 
 ## Decision Log (2026-07-03)
 
-- Terminology is **matchsets**; `~/.config/fd/*` is the **user configuration space**.
-- `-m/--match`, `-M/--exclude-match`, registry layering with name shadowing: as
-  specified above.
+- Terminology is **matchsets** — one word in every casing (`Matchset` in CamelCase,
+  never `MatchSet`); `~/.config/fd/*` is the **user configuration space**.
+- Selection flags: `-m/--matchsets`, `-M/--exclude-matchsets` (long forms renamed
+  from `--match`/`--exclude-match`; plural because the value is a CSV of set names).
+  Registry layering with name shadowing: as specified above.
 - `--no-matchsets` becomes `--no-user-matchsets`.
 - `--list-matchsets` subsumes `--matchsets`'s validate role; `--matchsets` retired.
 - Built-ins = the `matchsets-sketch.kdl` taxonomy (not the minimal f-exclusions

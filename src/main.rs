@@ -265,8 +265,7 @@ fn construct_config(
     let selected_matchsets = matchsets::load_selected(
         &opts.matchsets,
         &opts.exclude_matchsets,
-        opts.load_matchsets || !(opts.matchsets.is_empty() && opts.exclude_matchsets.is_empty()),
-        opts.no_matchsets,
+        opts.no_user_matchsets,
         case_sensitive,
     )?;
 

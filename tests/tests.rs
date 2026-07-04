@@ -1292,7 +1292,7 @@ fn test_matchsets_include_entries() {
     .matchsets_file(include_str!("fixtures/matchsets/f-exclusions.kdl"));
 
     te.assert_output(
-        &["--hidden", "--no-ignore", "--match", "metadata", "."],
+        &["--hidden", "--no-ignore", "--matchsets", "metadata", "."],
         ".DS_Store
         .venv/
         node_modules/",
@@ -1313,7 +1313,7 @@ fn test_matchsets_exclude_entries_and_prune_dirs() {
     .matchsets_file(include_str!("fixtures/matchsets/f-exclusions.kdl"));
 
     te.assert_output(
-        &["--hidden", "--exclude-match", "metadata", "main"],
+        &["--hidden", "--exclude-matchsets", "metadata", "main"],
         "src/main.rs",
     );
     te.assert_output(&["--hidden", "-M", "metadata", "package"], "");
@@ -1333,14 +1333,31 @@ fn test_matchsets_include_is_or_across_sets() {
 }
 
 #[test]
-fn test_matchsets_no_matchsets_blocks_requested_sets() {
+fn test_matchsets_default_empty_does_not_load_user_file() {
+    let te = TestEnv::new(&["node_modules"], &["node_modules/package.json"])
+        .matchsets_file("not kdl [[[");
+
+    te.assert_output(&["."], "node_modules/\nnode_modules/package.json\nsymlink");
+}
+
+#[test]
+fn test_matchsets_no_user_matchsets_skips_user_file() {
     let te = TestEnv::new(&["node_modules"], &["node_modules/package.json"])
         .matchsets_file(include_str!("fixtures/matchsets/f-exclusions.kdl"));
 
     te.assert_failure_with_error(
-        &["--no-matchsets", "-m", "metadata", "."],
-        "[fd error]: matchsets were requested, but --no-matchsets disabled matchset loading",
+        &["--no-user-matchsets", "-m", "metadata", "."],
+        "[fd error]: unknown matchset 'metadata'",
     );
+}
+
+#[test]
+fn test_matchsets_retired_flag_names_are_rejected() {
+    let te = TestEnv::new(&["node_modules"], &["node_modules/package.json"]);
+
+    te.assert_failure(&["--match", "metadata", "."]);
+    te.assert_failure(&["--exclude-match", "metadata", "."]);
+    te.assert_failure(&["--no-matchsets", "-m", "metadata", "."]);
 }
 
 #[test]
