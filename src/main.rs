@@ -83,6 +83,12 @@ fn run() -> Result<ExitCode> {
     }
 
     set_working_dir(&opts)?;
+
+    if opts.list_matchsets {
+        matchsets::print_list(&opts.matchset_files, opts.no_user_matchsets)?;
+        return Ok(ExitCode::Success);
+    }
+
     let search_paths = opts.search_paths()?;
     if search_paths.is_empty() {
         bail!("No valid search paths given.");
@@ -265,8 +271,8 @@ fn construct_config(
     let selected_matchsets = matchsets::load_selected(
         &opts.matchsets,
         &opts.exclude_matchsets,
+        &opts.matchset_files,
         opts.no_user_matchsets,
-        case_sensitive,
     )?;
 
     let path_separator = opts

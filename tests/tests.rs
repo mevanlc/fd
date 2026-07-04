@@ -1361,6 +1361,181 @@ fn test_matchsets_retired_flag_names_are_rejected() {
 }
 
 #[test]
+fn test_matchsets_builtins_available_without_user_file() {
+    let te = TestEnv::new(
+        &["node_modules", ".venv", "src"],
+        &[
+            "node_modules/package.json",
+            ".venv/pyvenv.cfg",
+            ".DS_Store",
+            "src/main.rs",
+        ],
+    );
+
+    te.assert_output(
+        &["--hidden", "--no-ignore", "-m", "package,noise", "."],
+        ".DS_Store
+        .venv/
+        node_modules/",
+    );
+}
+
+#[test]
+fn test_matchsets_builtin_vcs_excludes_git_dir() {
+    let te = TestEnv::new(&["src"], &["src/main.rs"]);
+
+    te.assert_output(
+        &["--hidden", "--no-ignore", "-M", "vcs", "."],
+        ".fdignore
+        .gitignore
+        src/
+        src/main.rs
+        symlink",
+    );
+}
+
+#[test]
+fn test_matchsets_user_file_shadows_builtin() {
+    let te = TestEnv::new(&["node_modules"], &[".DS_Store"])
+        .matchsets_file(r#""noise" { (d) name literal full { "node_modules" } }"#);
+
+    // the user definition of 'noise' wins over the builtin (.DS_Store)...
+    te.assert_output(
+        &["--hidden", "--no-ignore", "-m", "noise", "."],
+        "node_modules/",
+    );
+    // ...while unshadowed builtins remain available
+    te.assert_output(&["--hidden", "--no-ignore", "-m", "vcs", "."], ".git/");
+}
+
+#[test]
+fn test_matchsets_matchset_file_flag() {
+    let te = TestEnv::new(&["src"], &["src/main.rs", "src/lib.rs"]);
+    fs::write(
+        te.test_root().join("sets.kdl"),
+        r#""rust_sources" { (f) name glob full { "*.rs" } }"#,
+    )
+    .unwrap();
+
+    te.assert_output(
+        &["--matchset-file", "sets.kdl", "-m", "rust_sources", "."],
+        "src/lib.rs
+        src/main.rs",
+    );
+    te.assert_failure_with_error(
+        &["--matchset-file", "missing.kdl", "-m", "rust_sources", "."],
+        "[fd error]: matchset file not found: missing.kdl",
+    );
+}
+
+#[test]
+fn test_matchsets_matchset_file_shadows_user_file() {
+    let te = TestEnv::new(&["node_modules"], &[".DS_Store"])
+        .matchsets_file(r#""noise" { (f) name literal full { ".DS_Store" } }"#);
+    fs::write(
+        te.test_root().join("sets.kdl"),
+        r#""noise" { (d) name literal full { "node_modules" } }"#,
+    )
+    .unwrap();
+
+    te.assert_output(
+        &[
+            "--hidden",
+            "--no-ignore",
+            "--matchset-file",
+            "sets.kdl",
+            "-m",
+            "noise",
+            ".",
+        ],
+        "node_modules/",
+    );
+}
+
+#[test]
+fn test_matchsets_no_user_matchsets_keeps_builtins() {
+    let te = TestEnv::new(&["node_modules"], &[".DS_Store"]).matchsets_file("not kdl [[[");
+
+    // a broken user matchset file fails selection...
+    te.assert_failure(&["-m", "noise", "."]);
+    // ...but --no-user-matchsets is the escape hatch: builtins still work
+    te.assert_output(
+        &[
+            "--hidden",
+            "--no-ignore",
+            "--no-user-matchsets",
+            "-m",
+            "noise",
+            ".",
+        ],
+        ".DS_Store",
+    );
+}
+
+#[test]
+fn test_matchsets_list_builtins() {
+    let te = TestEnv::new(&["src"], &["src/main.rs"]);
+
+    te.assert_output(
+        &["--list-matchsets"],
+        "NAME          SOURCE   CLAUSES
+        build_output  builtin  2 (d) bash
+        cache         builtin  2 (d) name literal full
+        noise         builtin  1 (f) name literal full
+        package       builtin  3 (d) name literal full
+        vcs           builtin  4 (d) name literal full",
+    );
+}
+
+#[test]
+fn test_matchsets_patterns_are_case_sensitive() {
+    let te = TestEnv::new(&["node_modules"], &["keep.txt"])
+        .matchsets_file(r#""upper" { (d) name literal full { "NODE_MODULES" } }"#);
+
+    // matchset patterns must not inherit smart case from the (lowercase)
+    // search pattern: NODE_MODULES != node_modules
+    te.assert_output(&["--no-ignore", "-M", "upper", "node"], "node_modules/");
+    te.assert_output(&["--no-ignore", "-m", "upper", "."], "");
+}
+
+#[test]
+fn test_matchsets_unannotated_clause_matches_any_entry_kind() {
+    let te = TestEnv::new(&["thingdir"], &["thing"])
+        .matchsets_file(r#""things" { name glob full { "thing*" } }"#);
+
+    te.assert_output(
+        &["-m", "things", "."],
+        "thing
+        thingdir/",
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn test_matchsets_executable_predicate() {
+    use std::os::unix::fs::OpenOptionsExt;
+
+    // This test assumes the current user isn't root
+    // (otherwise if the executable bit is set for any level, it is executable for the current
+    // user)
+    if Uid::current().is_root() {
+        return;
+    }
+
+    let te = TestEnv::new(&[], &["plain.txt"])
+        .matchsets_file(r#""exes" { (f,x) name glob full { "*" } }"#);
+
+    fs::OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .mode(0o755)
+        .open(te.test_root().join("script.sh"))
+        .unwrap();
+
+    te.assert_output(&["-m", "exes", "."], "script.sh");
+}
+
+#[test]
 fn test_bash_search_parse_error() {
     let te = TestEnv::new(DEFAULT_DIRS, DEFAULT_FILES);
 

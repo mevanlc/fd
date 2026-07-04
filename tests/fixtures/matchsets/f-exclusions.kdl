@@ -1,7 +1,7 @@
 // Variant harmonized with f's exclusion classes.
 
 "vcs" {
-    dir name literal full {
+    (d) name literal full {
         ".git"
         ".svn"
         ".hg"
@@ -9,12 +9,12 @@
 }
 
 "metadata" {
-    dir name literal full {
+    (d) name literal full {
         "node_modules"
         ".venv"
     }
 
-    file name literal full {
+    (f) name literal full {
         ".DS_Store"
     }
 }

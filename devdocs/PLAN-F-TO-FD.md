@@ -43,7 +43,7 @@ merge-base `40d8eb3`):
 | `-P` prune-if (vendored scanner) | **Done, superseded** — native `--bash`, `--prune-if`, `--exclude-if` (`src/bash_cond.rs`) plus predicate optimizations |
 | `-R` metadata sort with mini-help syntax | **Done** — `--sort`/`-R` redesign (`parse_sort` in `src/cli.rs`) |
 | `-l` list details | **Done** — internal long-listing, ls-like timestamps, works with `-a` |
-| Default exclusion "seams" (vcs, metadata) | **Partially done** — matchsets exist (`src/matchsets.rs`, `-m`/`-M`) but no built-ins ship yet |
+| Default exclusion "seams" (vcs, metadata) | **Done** — matchsets complete (M1, 2026-07-03): annotation clause grammar, built-ins (`src/matchset_builtins.kdl`), `--matchset-file`, `--list-matchsets`, layering/shadowing, fixed case sensitivity |
 | `-w` AND patterns | **Already upstream** — `--and` |
 | `-Q` single result | **Already upstream** — `-1`/`--max-one-result` |
 | `-N` non-empty | **Already upstream** — `-S +1b` |
@@ -459,7 +459,7 @@ while fd stays pure.
 
 ## Milestones
 
-1. **M1 — Matchsets complete**: clause-grammar revision (subject-named nodes,
+1. **M1 — Matchsets complete** *(landed 2026-07-03)*: clause-grammar revision (subject-named nodes,
    type-annotation constraints with negation, typeless clauses, builtin/fixture
    migration), built-ins
    (sketch taxonomy), `--matchset-file`, `--list-matchsets`, `--no-user-matchsets`

@@ -398,9 +398,35 @@ pub struct Opts {
     )]
     pub exclude_matchsets: Vec<String>,
 
-    /// Do not load matchsets from ~/.config/fd/matchsets.kdl.
-    #[arg(long = "no-user-matchsets")]
+    /// Load additional matchsets from a KDL file. Can be specified multiple
+    /// times; sets in later files shadow same-named sets from earlier files,
+    /// the user matchset file, and the built-ins.
+    #[arg(
+        long = "matchset-file",
+        value_name = "path",
+        help = "Load matchsets from a KDL file",
+        long_help
+    )]
+    pub matchset_files: Vec<PathBuf>,
+
+    /// Do not load the user matchset file (~/.config/fd/matchsets.kdl).
+    /// Built-in matchsets and files given with '--matchset-file' remain
+    /// available.
+    #[arg(
+        long = "no-user-matchsets",
+        help = "Do not load the user matchset file",
+        long_help
+    )]
     pub no_user_matchsets: bool,
+
+    /// List all available matchsets with their source and a summary of their
+    /// match clauses, then exit.
+    #[arg(
+        long = "list-matchsets",
+        help = "List available matchsets and exit",
+        long_help
+    )]
+    pub list_matchsets: bool,
 
     /// Filter the search by type:
     /// {n}  'f' or 'file':         regular files
