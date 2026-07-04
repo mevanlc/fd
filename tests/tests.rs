@@ -1535,6 +1535,55 @@ fn test_matchsets_executable_predicate() {
     te.assert_output(&["-m", "exes", "."], "script.sh");
 }
 
+/// Assert the five base invocations whose output must stay byte-identical to
+/// upstream fd (devdocs/PLAN-F-TO-FD.md, "The Invariant"). A failure here is
+/// an invariant break, not a feature bug.
+fn assert_invariant_base_cases(te: &TestEnv) {
+    let root_expected = "a.foo
+        e1 e2
+        one/
+        one/b.foo
+        one/two/
+        one/two/c.foo
+        one/two/C.Foo2
+        one/two/three/
+        one/two/three/d.foo
+        one/two/three/directory_foo/
+        symlink";
+    let subdir_expected = "one/b.foo
+        one/two/
+        one/two/c.foo
+        one/two/C.Foo2
+        one/two/three/
+        one/two/three/d.foo
+        one/two/three/directory_foo/";
+
+    te.assert_output(&[], root_expected);
+    te.assert_output(&["."], root_expected);
+    te.assert_output(&["-g", "*"], root_expected);
+    te.assert_output(&[".", "one"], subdir_expected);
+    te.assert_output(&["-g", "*", "one"], subdir_expected);
+}
+
+#[test]
+fn test_invariant_base_case_goldens() {
+    let te = TestEnv::new(DEFAULT_DIRS, DEFAULT_FILES);
+
+    assert_invariant_base_cases(&te);
+}
+
+/// A malformed user matchset file must not affect any base invocation: no
+/// config is read unless a matchset flag is present on the command line.
+/// (Gated off Windows: the test redirects the user configuration space via
+/// XDG_CONFIG_HOME, which is not honored there.)
+#[cfg(not(windows))]
+#[test]
+fn test_invariant_holds_with_malformed_user_config() {
+    let te = TestEnv::new(DEFAULT_DIRS, DEFAULT_FILES).matchsets_file("not kdl [[[");
+
+    assert_invariant_base_cases(&te);
+}
+
 #[test]
 fn test_bash_search_parse_error() {
     let te = TestEnv::new(DEFAULT_DIRS, DEFAULT_FILES);

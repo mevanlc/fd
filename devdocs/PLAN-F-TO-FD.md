@@ -469,8 +469,10 @@ while fd stays pure.
    (double structural, `x,-x`, duplicates), layering/shadowing,
    `--no-user-matchsets` + builtin selection, listing output, case-sensitive
    matching regardless of `-i`/pattern casing.
-2. **M2 — Invariance net** (small; can precede or interleave with M1): config-isolation
-   test, named base-case goldens.
+2. **M2 — Invariance net** *(landed 2026-07-03)*: config-isolation test, named
+   base-case goldens (`test_invariant_*` in `tests/tests.rs`), and the optional
+   fork-vs-upstream spot check (`devdocs/check-invariant.sh`; verified clean
+   against `40d8eb3`).
 3. **M3 — Mini-helps**: `src/value_help.rs`, `or_help` combinator, post-parse checks.
    Tests: each topic exits 0 with expected stdout; `-x ./help` still execs.
 4. **M4 — `f` wrapper rewrite** (contrib script and/or `f` repo): translation table
