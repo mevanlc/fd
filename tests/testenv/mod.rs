@@ -1,4 +1,5 @@
 use std::env;
+use std::ffi::OsString;
 use std::fs;
 use std::io::{self, Write};
 #[cfg(unix)]
@@ -23,6 +24,9 @@ pub struct TestEnv {
 
     /// Temporary directory for storing test config (global ignore file)
     config_dir: Option<TempDir>,
+
+    /// Extra environment variables to set when running *fd*.
+    env_vars: Vec<(OsString, OsString)>,
 }
 
 /// Create the working directory and the test files.
@@ -164,16 +168,21 @@ impl TestEnv {
             fd_exe,
             normalize_line: false,
             config_dir: Some(config_dir),
+            env_vars: Vec::new(),
         }
     }
 
     pub fn normalize_line(self, normalize: bool) -> TestEnv {
         TestEnv {
-            temp_dir: self.temp_dir,
-            fd_exe: self.fd_exe,
             normalize_line: normalize,
-            config_dir: self.config_dir,
+            ..self
         }
+    }
+
+    /// Set an extra environment variable for *fd* invocations.
+    pub fn env(mut self, key: impl Into<OsString>, value: impl Into<OsString>) -> TestEnv {
+        self.env_vars.push((key.into(), value.into()));
+        self
     }
 
     pub fn global_ignore_file(self, content: &str) -> TestEnv {
@@ -326,6 +335,9 @@ impl TestEnv {
         // Make sure LS_COLORS is unset to ensure consistent
         // color output
         cmd.env("LS_COLORS", "");
+        for (key, value) in &self.env_vars {
+            cmd.env(key, value);
+        }
         cmd.args(args);
 
         // Run *fd*.

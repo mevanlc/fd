@@ -46,3 +46,22 @@
         ".DS_Store"
     }
 }
+
+// Trash locations across platforms. $<home>-anchored patterns only match
+// relative to the user's home directory; $<vroot>-anchored patterns only
+// match relative to a volume root (a mount point). A directory merely
+// *named* .Trashes elsewhere in a tree is not matched.
+"trash" {
+    (d) path literal full {
+        "$<home>/.Trash"
+        "$<home>/.local/share/Trash"
+    }
+    (d) path literal full {
+        "$<vroot>/.Trashes"
+        "$<vroot>/$RECYCLE.BIN"
+        "$<vroot>/System Volume Information"
+    }
+    (d) path glob full {
+        "$<vroot>/.Trash-*"
+    }
+}

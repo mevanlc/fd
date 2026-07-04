@@ -106,6 +106,24 @@ enum PatternKind {
 enum Matcher {
     Regex(Regex),
     Bash(bash_cond::Condition),
+    /// A pattern led by a location variable (`$<home>/...`, `$<vroot>/...`):
+    /// the last `depth` components of the entry's absolute path must match
+    /// `tail`, and the remaining prefix must be the anchor location.
+    Anchored {
+        anchor: Anchor,
+        tail: Regex,
+        depth: usize,
+    },
+}
+
+#[derive(Clone)]
+enum Anchor {
+    /// The user's home directory (as reported plus canonicalized, so both
+    /// spellings of a symlinked home match).
+    Home(Vec<PathBuf>),
+    /// Any volume root: a path with no parent, or one whose device number
+    /// differs from its parent's.
+    VolumeRoot,
 }
 
 impl CompiledMatchset {
@@ -131,7 +149,86 @@ impl CompiledMatchClause {
                 Ok(regex.is_match(&filesystem::osstr_to_bytes(subject)))
             }
             Matcher::Bash(condition) => condition.evaluate(entry.path(), context_dir, config),
+            Matcher::Anchored {
+                anchor,
+                tail,
+                depth,
+            } => Ok(matches_anchored(entry.path(), anchor, tail, *depth)),
         }
+    }
+}
+
+fn matches_anchored(path: &Path, anchor: &Anchor, tail: &Regex, depth: usize) -> bool {
+    let Ok(absolute) = std::path::absolute(path) else {
+        return false;
+    };
+    let absolute = normalize_lexically(&absolute);
+
+    let mut prefix = absolute.as_path();
+    for _ in 0..depth {
+        match prefix.parent() {
+            Some(parent) => prefix = parent,
+            None => return false,
+        }
+    }
+
+    let tail_subject = absolute
+        .strip_prefix(prefix)
+        .expect("prefix is an ancestor of the absolute path");
+    if !tail.is_match(&filesystem::osstr_to_bytes(tail_subject.as_os_str())) {
+        return false;
+    }
+
+    match anchor {
+        Anchor::Home(homes) => homes.iter().any(|home| home.as_path() == prefix),
+        Anchor::VolumeRoot => is_volume_root(prefix),
+    }
+}
+
+/// Resolve `.` and `..` components lexically (no filesystem access).
+/// Anchoring is lexical by design; symlinked spellings are handled by
+/// matching against both the reported and canonicalized anchor paths.
+fn normalize_lexically(path: &Path) -> PathBuf {
+    use std::path::Component;
+
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                if !normalized.pop() {
+                    normalized.push(component);
+                }
+            }
+            _ => normalized.push(component),
+        }
+    }
+    normalized
+}
+
+fn is_volume_root(path: &Path) -> bool {
+    let Some(parent) = path.parent() else {
+        // Filesystem root, drive root (C:\), or UNC share root.
+        return true;
+    };
+
+    #[cfg(unix)]
+    {
+        fn device_num(path: &Path) -> std::io::Result<u64> {
+            use std::os::unix::fs::MetadataExt;
+            path.metadata().map(|metadata| metadata.dev())
+        }
+        match (device_num(path), device_num(parent)) {
+            (Ok(own), Ok(parents)) => own != parents,
+            _ => false,
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        // On Windows, only drive and UNC roots (no parent) are recognized;
+        // junction-style mount points are not detected.
+        let _ = parent;
+        false
     }
 }
 
@@ -560,8 +657,8 @@ fn parse_clause_group(
             let clauses = patterns
                 .into_iter()
                 .map(|pattern| {
-                    let matcher =
-                        compile_matcher(&pattern, pattern_kind, mode).with_context(|| {
+                    let matcher = compile_clause_pattern(&pattern, subject, pattern_kind, mode)
+                        .with_context(|| {
                             format!("invalid pattern '{pattern}' in matchset '{set_name}'")
                         })?;
                     Ok(CompiledMatchClause {
@@ -606,6 +703,104 @@ fn clause_patterns(node: &KdlNode) -> Result<Vec<String>> {
         patterns.push(child.name().value().to_string());
     }
     Ok(patterns)
+}
+
+/// Compile one pattern of a name/path clause, handling the location-variable
+/// prefix (`$<home>/...`, `$<vroot>/...`) that anchors a `path` pattern to a
+/// semantic location. A leading literal `$<` can be escaped as `$$<`; a plain
+/// `$` anywhere (e.g. `$RECYCLE.BIN`) is literal as-is.
+fn compile_clause_pattern(
+    pattern: &str,
+    subject: Subject,
+    pattern_kind: PatternKind,
+    mode: Mode,
+) -> Result<Matcher> {
+    let Some((variable, tail)) = parse_location_prefix(pattern)? else {
+        let pattern = pattern
+            .strip_prefix('$')
+            .filter(|p| p.starts_with("$<"))
+            .unwrap_or(pattern);
+        return compile_matcher(pattern, pattern_kind, mode);
+    };
+
+    if matches!(subject, Subject::Name) {
+        bail!("location variable '$<{variable}>' is only allowed in 'path' clauses");
+    }
+    if matches!(mode, Mode::Sub) {
+        bail!("location variable '$<{variable}>' requires 'full' mode");
+    }
+    if matches!(pattern_kind, PatternKind::Regex) {
+        bail!("location variable '$<{variable}>' is not supported in 'regex' clauses");
+    }
+
+    let components: Vec<&str> = tail.split('/').collect();
+    if components.iter().any(|component| component.is_empty()) {
+        bail!("empty path component after '$<{variable}>'");
+    }
+    let depth = components.len();
+
+    // The tail is matched against the last `depth` components of the entry's
+    // absolute path, which use the platform separator.
+    let tail_regex = match pattern_kind {
+        PatternKind::Literal => {
+            let native = components.join(std::path::MAIN_SEPARATOR_STR);
+            build_regex(&format!("^{}$", regex::escape(&native)))?
+        }
+        PatternKind::Glob => {
+            let glob = GlobBuilder::new(tail).literal_separator(true).build()?;
+            build_regex(glob.regex())?
+        }
+        PatternKind::Regex => unreachable!("rejected above"),
+    };
+
+    let anchor = match variable {
+        "home" => Anchor::Home(home_anchor_paths()?),
+        "vroot" => Anchor::VolumeRoot,
+        _ => bail!("unknown location variable '$<{variable}>' (expected 'home' or 'vroot')"),
+    };
+
+    Ok(Matcher::Anchored {
+        anchor,
+        tail: tail_regex,
+        depth,
+    })
+}
+
+/// Split a leading `$<variable>/tail` off a pattern. Returns `None` for
+/// patterns that do not start with `$<` (a lone `$` stays literal).
+fn parse_location_prefix(pattern: &str) -> Result<Option<(&str, &str)>> {
+    if pattern.starts_with("$$<") {
+        // Escaped literal '$<'; the caller strips one '$'.
+        return Ok(None);
+    }
+    let Some(rest) = pattern.strip_prefix("$<") else {
+        return Ok(None);
+    };
+    let Some((variable, tail)) = rest.split_once('>') else {
+        bail!("unterminated location variable (expected '$<name>/...')");
+    };
+    let Some(tail) = tail.strip_prefix('/') else {
+        bail!("location variable '$<{variable}>' must be followed by '/' and a path");
+    };
+    if tail.is_empty() {
+        bail!("location variable '$<{variable}>' must be followed by a non-empty path");
+    }
+    Ok(Some((variable, tail)))
+}
+
+/// The path(s) that count as `$<home>`: the reported home directory and its
+/// canonicalized form, so entries reached through either spelling of a
+/// symlinked home still anchor.
+fn home_anchor_paths() -> Result<Vec<PathBuf>> {
+    let home =
+        etcetera::home_dir().context("could not resolve '$<home>' (no home directory found)")?;
+    let mut paths = vec![home.clone()];
+    if let Ok(canonical) = fs::canonicalize(&home)
+        && canonical != home
+    {
+        paths.push(canonical);
+    }
+    Ok(paths)
 }
 
 // Matchset patterns always compile case-sensitive: a named set is a
@@ -653,7 +848,14 @@ mod tests {
     #[test]
     fn builtin_matchsets_parse() {
         let registry = Registry::builtins().unwrap();
-        for name in ["vcs_meta", "build_output", "cache", "package", "noise"] {
+        for name in [
+            "vcs_meta",
+            "build_output",
+            "cache",
+            "package",
+            "noise",
+            "trash",
+        ] {
             assert!(registry.sets.contains_key(name), "missing builtin '{name}'");
         }
     }
@@ -716,6 +918,125 @@ mod tests {
         "#;
 
         assert!(parse_registry(source).is_err());
+    }
+
+    #[test]
+    fn parses_location_variable_patterns() {
+        let registry = parse_registry(
+            r#"
+            "s" {
+                (d) path literal full { "$<home>/.Trash"; "$<vroot>/.Trashes" }
+                (d) path glob full { "$<vroot>/.Trash-*" }
+            }
+        "#,
+        )
+        .unwrap();
+
+        assert!(registry.sets.contains_key("s"));
+    }
+
+    #[test]
+    fn rejects_invalid_location_variable_patterns() {
+        for (clause, pattern) in [
+            // unknown variable
+            ("path literal full", "$<bogus>/.Trash"),
+            // unterminated variable
+            ("path literal full", "$<home/.Trash"),
+            // no tail
+            ("path literal full", "$<home>"),
+            // no separator before the tail
+            ("path literal full", "$<home>.Trash"),
+            // empty path component
+            ("path literal full", "$<home>//x"),
+            // name clauses cannot anchor
+            ("name literal full", "$<home>/.Trash"),
+            // sub mode contradicts anchoring
+            ("path literal sub", "$<home>/.Trash"),
+            // regex tails are not supported
+            ("path regex full", "$<home>/.+"),
+        ] {
+            let source = format!(r#""s" {{ (d) {clause} {{ "{pattern}" }} }}"#);
+            assert!(
+                parse_registry(&source).is_err(),
+                "'{clause} {{ {pattern} }}' should be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn dollar_is_literal_unless_it_introduces_a_variable() {
+        // A plain '$' (e.g. $RECYCLE.BIN) needs no escaping; a leading
+        // literal '$<' is written '$$<'.
+        let registry = parse_registry(
+            r#"
+            "s" {
+                (d) name literal full { "$RECYCLE.BIN" }
+                (d) path literal full { "$$<not-a-variable>/x" }
+            }
+        "#,
+        )
+        .unwrap();
+
+        assert!(registry.sets.contains_key("s"));
+    }
+
+    #[test]
+    fn normalize_lexically_folds_dot_components() {
+        assert_eq!(
+            normalize_lexically(Path::new("/a/b/../c/./d")),
+            PathBuf::from("/a/c/d")
+        );
+        assert_eq!(normalize_lexically(Path::new("/a/..")), PathBuf::from("/"));
+    }
+
+    #[test]
+    fn volume_root_detection() {
+        // The filesystem root is always a volume root.
+        assert!(is_volume_root(Path::new(if cfg!(windows) {
+            "C:\\"
+        } else {
+            "/"
+        })));
+
+        // A freshly created plain subdirectory is on its parent's device.
+        let dir = tempfile::tempdir().unwrap();
+        let sub = dir.path().join("sub");
+        fs::create_dir(&sub).unwrap();
+        assert!(!is_volume_root(&sub));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn anchored_home_matching_uses_prefix_equality() {
+        let anchor = Anchor::Home(vec![PathBuf::from("/home/me")]);
+        let tail = build_regex(&format!("^{}$", regex::escape(".Trash"))).unwrap();
+
+        assert!(matches_anchored(
+            Path::new("/home/me/.Trash"),
+            &anchor,
+            &tail,
+            1
+        ));
+        // same name, wrong location
+        assert!(!matches_anchored(
+            Path::new("/home/me/sub/.Trash"),
+            &anchor,
+            &tail,
+            1
+        ));
+        assert!(!matches_anchored(
+            Path::new("/srv/other/.Trash"),
+            &anchor,
+            &tail,
+            1
+        ));
+        // lexical normalization applies before anchoring
+        assert!(matches_anchored(
+            Path::new("/home/me/sub/../.Trash"),
+            &anchor,
+            &tail,
+            1
+        ));
     }
 
     #[test]

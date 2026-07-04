@@ -133,12 +133,22 @@ The built-in registry is the taxonomy in
 
 ```kdl
 // shown in the revised clause grammar; the sketch file migrates with it
-"vcs_meta"     { (d) name literal full { ".git"; ".svn"; ".hg"; ".bzr" } }
+"vcs_meta"     { (d) name literal full { ".git"; ".svn"; ".hg"; ".bzr" }
+                 (f) name literal full { ".git" } }
 "build_output" { (d) bash { /* target + CACHEDIR.TAG, gradle build dirs */ } }
 "cache"        { (d) name literal full { "__pycache__"; ".cache" } }
 "package"      { (d) name literal full { "node_modules"; "__pypackages__"; ".venv" } }
 "noise"        { (f) name literal full { ".DS_Store" } }
+"trash"        { (d) path literal full { "$<home>/.Trash"; "$<home>/.local/share/Trash" }
+                 (d) path literal full { "$<vroot>/.Trashes"; "$<vroot>/$RECYCLE.BIN";
+                                         "$<vroot>/System Volume Information" }
+                 (d) path glob full { "$<vroot>/.Trash-*" } }
 ```
+
+`trash` (added 2026-07-04) is a separate set, not part of `noise`: `noise` stays
+"metadata litter files" so the `f` wrapper's default
+(`--exclude-matchsets vcs_meta,package,noise`) keeps old `f` behavior; trash
+exclusion is opt-in via `-M trash`.
 
 `.venv` lives in `package` (resolved 2026-07-03; already present in the sketch) — a
 virtualenv is installed packages, the direct analog of `__pypackages__`. `f`'s default
@@ -440,6 +450,39 @@ while fd stays pure.
   `f`'s `-E .git` coverage.
 - Set composition stays parked; direction and a scoping-controls sketch are recorded
   under Open Decisions.
+
+## Decision Log (2026-07-04)
+
+- **OS-dependent rules: rejected.** Patterns like `.DS_Store` or `$RECYCLE.BIN`
+  are self-gating — cross-OS exclusion is desirable (network shares, foreign
+  volumes, polluted repos). If ever needed, the reserved syntax is a clause
+  property (`os=macos`), not a positional atom.
+- **Location anchoring: adopted as pattern variables** — `$<home>/...` and
+  `$<vroot>/...` at the start of a `path` pattern anchor it to a semantic
+  location. Chosen over a trailing positional atom (muddies the fixed
+  `<pattern-kind> <mode>` grammar) and over clause properties (`at=`/`under=`
+  needed two concepts; a path expresses both depths naturally). Rules:
+  leading position only, `path` clauses only, `full` mode only, `literal`/`glob`
+  kinds only (no `regex` tails); `$` is literal unless followed by `<`
+  (`$RECYCLE.BIN` needs no escape); a leading literal `$<` is written `$$<`;
+  unknown variables are hard errors.
+- **`$<home>`** resolves via `etcetera::home_dir()` (already a dependency) at
+  matchset-load time — a hard error if unresolvable, which by laziness can only
+  fire when a matchset flag is used. Matching is prefix equality against both
+  the reported and canonicalized home on the entry's lexically-normalized
+  absolute path (so symlinked homes match under either spelling).
+- **`$<vroot>`** is a match-time predicate, not an expansion: the anchored
+  prefix must be a volume root — no parent (filesystem/drive/UNC root) or a
+  device number differing from its parent's (the same `st_dev` trick
+  `--one-file-system` uses via the `ignore` crate). Enumerating mounts via
+  `sysinfo` was considered and rejected: the predicate needs no new dependency
+  and covers every mount type by definition. Known limits: Windows
+  junction-style mount points are not detected (drive/UNC roots only);
+  same-device bind mounts are invisible; macOS's root/Data volume group shares
+  one `st_dev`, so that particular boundary is not detected (verified 2026-07-04;
+  real volume boundaries like `/System/Volumes/VM` and external disks are).
+- **`trash` builtin added** (see Built-in sets): home- and vroot-anchored, in
+  its own set rather than `noise`, opt-in for the `f` wrapper.
 
 ## Open Decisions
 

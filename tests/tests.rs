@@ -1486,6 +1486,7 @@ fn test_matchsets_list_builtins() {
         cache         builtin  2 (d) name literal full
         noise         builtin  1 (f) name literal full
         package       builtin  3 (d) name literal full
+        trash         builtin  2 (d) path literal full, 3 (d) path literal full, 1 (d) path glob full
         vcs_meta      builtin  4 (d) name literal full, 1 (f) name literal full",
     );
 }
@@ -1536,6 +1537,52 @@ fn test_matchsets_executable_predicate() {
         .unwrap();
 
     te.assert_output(&["-m", "exes", "."], "script.sh");
+}
+
+/// `$<home>`-anchored patterns match only relative to the home directory;
+/// entries with the same name elsewhere are untouched.
+#[cfg(not(windows))]
+#[test]
+fn test_matchsets_trash_home_anchoring() {
+    let te = TestEnv::new(
+        &[".Trash", "sub/.Trash", ".local/share/Trash"],
+        &[
+            ".Trash/deleted",
+            "sub/.Trash/kept",
+            ".local/share/Trash/files",
+        ],
+    );
+    let home = te.test_root();
+    let te = te.env("HOME", home);
+
+    te.assert_output(
+        &["--hidden", "--no-ignore", "-M", "vcs_meta,trash", "."],
+        ".fdignore
+        .gitignore
+        .local/
+        .local/share/
+        sub/
+        sub/.Trash/
+        sub/.Trash/kept
+        symlink",
+    );
+}
+
+/// `$<vroot>`-anchored patterns require a volume-root parent, so trash-like
+/// names inside an ordinary tree are not excluded.
+#[test]
+fn test_matchsets_trash_vroot_names_not_matched_off_volume_roots() {
+    let te = TestEnv::new(&[".Trashes", ".Trash-1000"], &[".Trashes/f"]);
+
+    te.assert_output(
+        &["--hidden", "--no-ignore", "-M", "vcs_meta,trash", "."],
+        ".Trash-1000/
+        .Trashes/
+        .Trashes/f
+        .fdignore
+        .gitignore
+        symlink",
+    );
 }
 
 /// Assert the five base invocations whose output must stay byte-identical to
