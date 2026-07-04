@@ -2,9 +2,9 @@
 # f - a thin fd wrapper: "search everything" defaults, single-letter grammar.
 #
 # Everything f used to implement itself is native fd now: the default
-# exclusions are the built-in matchsets (vcs, package, noise), -P forwards
-# to --exclude-if, and 'help' option values forward to fd's mini-helps.
-# Requires an fd with matchset support (--exclude-matchsets).
+# exclusions are the built-in matchsets (vcs_meta, package, noise), -P
+# forwards to --exclude-if, and 'help' option values forward to fd's
+# mini-helps. Requires an fd with matchset support (--exclude-matchsets).
 #
 # License: MIT
 
@@ -233,9 +233,9 @@ if [ $show_help -eq 1 ]; then
         echo "Defaults differ from fd:"
         echo "  bypass ignore rules, search hidden, search full pathnames,"
         echo "  ignore case, and exclude fd's built-in matchsets:"
-        echo "    vcs      .git, .svn, .hg, .bzr"
-        echo "    package  node_modules, __pypackages__, .venv"
-        echo "    noise    .DS_Store"
+        echo "    vcs_meta  .git, .svn, .hg, .bzr"
+        echo "    package   node_modules, __pypackages__, .venv"
+        echo "    noise     .DS_Store"
         echo ""
         echo "A 'help' value forwards to fd's cheat-sheet for that option's"
         echo "syntax (e.g. 'f -S help', 'f -P help')."
@@ -317,7 +317,7 @@ fi
 
 # Default exclusions are fd's built-in matchsets; -V/-M opt back in.
 exclude_sets=()
-[ $show_vcs -eq 0 ] && exclude_sets+=(vcs)
+[ $show_vcs -eq 0 ] && exclude_sets+=(vcs_meta)
 [ $show_pkg -eq 0 ] && exclude_sets+=(package noise)
 if [ ${#exclude_sets[@]} -gt 0 ]; then
     args+=(--exclude-matchsets "$(IFS=,; echo "${exclude_sets[*]}")")

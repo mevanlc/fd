@@ -1381,16 +1381,19 @@ fn test_matchsets_builtins_available_without_user_file() {
 }
 
 #[test]
-fn test_matchsets_builtin_vcs_excludes_git_dir() {
-    let te = TestEnv::new(&["src"], &["src/main.rs"]);
+fn test_matchsets_builtin_vcs_meta_excludes_git_dir_and_pointer_file() {
+    // wt/.git is a regular file, like a git worktree or submodule pointer
+    let te = TestEnv::new(&["src", "wt"], &["src/main.rs", "wt/.git", "wt/code.rs"]);
 
     te.assert_output(
-        &["--hidden", "--no-ignore", "-M", "vcs", "."],
+        &["--hidden", "--no-ignore", "-M", "vcs_meta", "."],
         ".fdignore
         .gitignore
         src/
         src/main.rs
-        symlink",
+        symlink
+        wt/
+        wt/code.rs",
     );
 }
 
@@ -1405,7 +1408,7 @@ fn test_matchsets_user_file_shadows_builtin() {
         "node_modules/",
     );
     // ...while unshadowed builtins remain available
-    te.assert_output(&["--hidden", "--no-ignore", "-m", "vcs", "."], ".git/");
+    te.assert_output(&["--hidden", "--no-ignore", "-m", "vcs_meta", "."], ".git/");
 }
 
 #[test]
@@ -1483,7 +1486,7 @@ fn test_matchsets_list_builtins() {
         cache         builtin  2 (d) name literal full
         noise         builtin  1 (f) name literal full
         package       builtin  3 (d) name literal full
-        vcs           builtin  4 (d) name literal full",
+        vcs_meta      builtin  4 (d) name literal full, 1 (f) name literal full",
     );
 }
 

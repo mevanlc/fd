@@ -101,12 +101,12 @@ Three sources, later shadows earlier **by set name**:
 3. **`--matchset-file` files**, in command-line order
 
 Shadowing rather than collision errors: it mirrors gitconfig/PATH layering, and it lets
-a user redefine `vcs` without needing an escape hatch. `--list-matchsets` prints
+a user redefine `vcs_meta` without needing an escape hatch. `--list-matchsets` prints
 provenance so shadowing is visible:
 
 ```text
 NAME       SOURCE                                    CLAUSES
-vcs        builtin (shadowed by user matchsets.kdl) 4 dir-name literals
+vcs_meta   builtin (shadowed by user matchsets.kdl) 4 dir-name literals
 package    builtin                                   2 dir-name literals
 mystuff    --matchset-file ./sets.kdl               1 dir bash
 ```
@@ -120,7 +120,7 @@ startup cost when unselected.
 The flag is renamed and rescoped: it means "don't read the user matchset file"
 (analogous to `--no-ignore`), **not** "disable matchsets entirely". Built-ins and
 explicit `--matchset-file` files remain available, so
-`fd --no-user-matchsets -M vcs` works even when the user matchset file is broken —
+`fd --no-user-matchsets -M vcs_meta` works even when the user matchset file is broken —
 that's the escape hatch a wrapper script wants. This replaces the current
 `--no-matchsets` flag and its hard error in `matchsets::load_selected` ("matchsets
 were requested, but --no-matchsets disabled matchset loading"), plus its test in
@@ -133,7 +133,7 @@ The built-in registry is the taxonomy in
 
 ```kdl
 // shown in the revised clause grammar; the sketch file migrates with it
-"vcs"          { (d) name literal full { ".git"; ".svn"; ".hg"; ".bzr" } }
+"vcs_meta"     { (d) name literal full { ".git"; ".svn"; ".hg"; ".bzr" } }
 "build_output" { (d) bash { /* target + CACHEDIR.TAG, gradle build dirs */ } }
 "cache"        { (d) name literal full { "__pycache__"; ".cache" } }
 "package"      { (d) name literal full { "node_modules"; "__pypackages__"; ".venv" } }
@@ -142,18 +142,18 @@ The built-in registry is the taxonomy in
 
 `.venv` lives in `package` (resolved 2026-07-03; already present in the sketch) — a
 virtualenv is installed packages, the direct analog of `__pypackages__`. `f`'s default
-exclusions therefore map to `--exclude-matchsets vcs,package,noise` with zero config
+exclusions therefore map to `--exclude-matchsets vcs_meta,package,noise` with zero config
 (the extra `__pypackages__`/`.bzr` coverage is in `f`'s spirit).
 
 Umbrella sets (e.g. an f-style `metadata` grouping) wait for set composition
-(a `use "vcs"`-style clause) rather than duplicating pattern lists — parked, see
+(a `use "vcs_meta"`-style clause) rather than duplicating pattern lists — parked, see
 Open Decisions.
 
 ### Case sensitivity (decided 2026-07-03)
 
 Matchset patterns compile **case-sensitive, always** — no coupling to `-s`/`-i`/smart
 case. A named set is a definition; its meaning must not drift with the casing of an
-adjacent search pattern (previously, `fd -M vcs foo` vs `fd -M vcs Foo` produced
+adjacent search pattern (previously, `fd -M vcs_meta foo` vs `fd -M vcs_meta Foo` produced
 different exclusion behavior, because smart case resolves off the search pattern).
 Fixed sensitivity also matches `-E`, whose ignore-crate override globs are
 unconditionally case-sensitive, and bash clauses get real `[[ ]]` semantics.
@@ -180,7 +180,7 @@ constraint is a KDL **type annotation** prefixing the node name:
 ```
 
 ```kdl
-"vcs" {
+"vcs_meta" {
     (d) name literal full { ".git"; ".svn"; ".hg"; ".bzr" }
 }
 
@@ -341,12 +341,12 @@ translation table:
 
 | `f` | native fd |
 |---|---|
-| (default) | `-uu -p -i --exclude-matchsets vcs,package,noise` |
+| (default) | `-uu -p -i --exclude-matchsets vcs_meta,package,noise` |
 | `-O` | drop `-H` from defaults |
 | `-G` | drop `-I` from defaults |
 | `-n` | drop `-p` from defaults |
 | `-C` | `-s` instead of `-i` |
-| `-V` | drop `vcs` from default `--exclude-matchsets` |
+| `-V` | drop `vcs_meta` from default `--exclude-matchsets` |
 | `-M` | drop `package,noise` from default `--exclude-matchsets` |
 | `-f` / `-r` / `-b` | `-tf` / `-td` / `-tx` |
 | `-w <pat>` | `--and <pat>` |
@@ -366,7 +366,7 @@ wrapper as a contrib script (`contrib/f` in this repo, or it stays in the `f` re
 or reduce further to an alias / shell-function suggestion in the docs — e.g.
 
 ```sh
-f() { fd -uu -p -i --exclude-matchsets vcs,package,noise "$@"; }
+f() { fd -uu -p -i --exclude-matchsets vcs_meta,package,noise "$@"; }
 ```
 
 for users who want the defaults but not `f`'s single-letter grammar. The full wrapper
@@ -430,6 +430,14 @@ while fd stays pure.
 - Matchset patterns compile **case-sensitive, always** — no `-s`/`-i`/smart-case
   coupling (see Workstream 1, "Case sensitivity").
 - `.venv` lives in the builtin `package` set (already present in the sketch).
+- The VCS builtin is named **`vcs_meta`**, not `vcs` (renamed 2026-07-03 after
+  M1 landed): in fd's existing flag vocabulary (`--no-ignore-vcs`) "vcs" means
+  VCS ignore *rules*, while this set matches VCS *metadata* entries — one word
+  for two referents invited misreading (`-M vcs` ≠ "exclude vcs-ignored
+  entries"). A type-suffixed name (`vcsdir`) was rejected because the set is
+  not directories-only: it also matches `.git` *files* (git worktree and
+  submodule pointers) via a `(f)` clause added in the same change, restoring
+  `f`'s `-E .git` coverage.
 - Set composition stays parked; direction and a scoping-controls sketch are recorded
   under Open Decisions.
 

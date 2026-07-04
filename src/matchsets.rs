@@ -653,7 +653,7 @@ mod tests {
     #[test]
     fn builtin_matchsets_parse() {
         let registry = Registry::builtins().unwrap();
-        for name in ["vcs", "build_output", "cache", "package", "noise"] {
+        for name in ["vcs_meta", "build_output", "cache", "package", "noise"] {
             assert!(registry.sets.contains_key(name), "missing builtin '{name}'");
         }
     }
@@ -732,14 +732,15 @@ mod tests {
     #[test]
     fn merge_shadows_by_name() {
         let mut registry = Registry::builtins().unwrap();
-        let user = r#""vcs" { (d) name literal full { ".jj" } }"#.parse::<KdlDocument>().unwrap();
+        let user =
+            r#""vcs_meta" { (d) name literal full { ".jj" } }"#.parse::<KdlDocument>().unwrap();
         registry.merge(
             Registry::parse(&user, &Provenance::UserFile(PathBuf::from("matchsets.kdl"))).unwrap(),
         );
 
-        let vcs = &registry.sets["vcs"];
-        assert_eq!(vcs.clauses.len(), 1);
-        assert_eq!(vcs.shadows.len(), 1);
-        assert!(matches!(vcs.provenance, Provenance::UserFile(_)));
+        let vcs_meta = &registry.sets["vcs_meta"];
+        assert_eq!(vcs_meta.clauses.len(), 1);
+        assert_eq!(vcs_meta.shadows.len(), 1);
+        assert!(matches!(vcs_meta.provenance, Provenance::UserFile(_)));
     }
 }
