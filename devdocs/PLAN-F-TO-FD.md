@@ -132,27 +132,120 @@ The built-in registry is the taxonomy in
 `tests/fixtures/matchsets/matchsets-sketch.kdl` (decided 2026-07-03):
 
 ```kdl
-"vcs"          { dir name literal full { ".git"; ".svn"; ".hg"; ".bzr" } }
-"build_output" { dir bash { /* target + CACHEDIR.TAG, gradle build dirs */ } }
-"cache"        { dir name literal full { "__pycache__"; ".cache" } }
-"package"      { dir name literal full { "node_modules"; "__pypackages__" } }
-"noise"        { file name literal full { ".DS_Store" } }
+// shown in the revised clause grammar; the sketch file migrates with it
+"vcs"          { (d) name literal full { ".git"; ".svn"; ".hg"; ".bzr" } }
+"build_output" { (d) bash { /* target + CACHEDIR.TAG, gradle build dirs */ } }
+"cache"        { (d) name literal full { "__pycache__"; ".cache" } }
+"package"      { (d) name literal full { "node_modules"; "__pypackages__"; ".venv" } }
+"noise"        { (f) name literal full { ".DS_Store" } }
 ```
 
-One gap versus `f`'s seams: `.venv` appears nowhere in the sketch (`f` excluded it by
-default). Recommendation: add `".venv"` to `package` — a virtualenv is installed
-packages, the direct analog of `__pypackages__`. With that, `f`'s default exclusions
-map to `--exclude-matchsets vcs,package,noise` with zero config (the extra
-`__pypackages__`/`.bzr` coverage is in `f`'s spirit).
+`.venv` lives in `package` (resolved 2026-07-03; already present in the sketch) — a
+virtualenv is installed packages, the direct analog of `__pypackages__`. `f`'s default
+exclusions therefore map to `--exclude-matchsets vcs,package,noise` with zero config
+(the extra `__pypackages__`/`.bzr` coverage is in `f`'s spirit).
 
 Umbrella sets (e.g. an f-style `metadata` grouping) wait for set composition
-(a `use "vcs"`-style clause) rather than duplicating pattern lists — deferred, see
+(a `use "vcs"`-style clause) rather than duplicating pattern lists — parked, see
 Open Decisions.
+
+### Case sensitivity (decided 2026-07-03)
+
+Matchset patterns compile **case-sensitive, always** — no coupling to `-s`/`-i`/smart
+case. A named set is a definition; its meaning must not drift with the casing of an
+adjacent search pattern (previously, `fd -M vcs foo` vs `fd -M vcs Foo` produced
+different exclusion behavior, because smart case resolves off the search pattern).
+Fixed sensitivity also matches `-E`, whose ignore-crate override globs are
+unconditionally case-sensitive, and bash clauses get real `[[ ]]` semantics.
+
+Implementation: drop the `case_sensitive` parameter from `matchsets::load_selected`
+and `compile_matcher`; compile with `case_insensitive(false)`. A per-clause `icase`
+atom can be added later if a real need appears — do not build it speculatively.
 
 Representation: embed the KDL source via `include_str!` and parse it through the same
 `Registry::parse` path as user files (one parser, one validator; a unit test asserts
 the embedded source always parses). The sketch fixture then ceases to be a fixture and
 becomes the shipped source of truth (move it under `src/` or reference it from there).
+
+### Clause grammar: subject-named nodes, type-annotation constraint
+
+Decided 2026-07-03 (supersedes the original one-type-atom grammar in
+`parse_atoms`, a bare-atom-conjunction draft, and a `type=` property draft from
+the same day). Clause nodes are named by what they match on; the entry-type
+constraint is a KDL **type annotation** prefixing the node name:
+
+```text
+[([-]type[,[-]type...])] <name|path> <pattern-kind> <mode> { patterns... }
+[([-]type[,[-]type...])] bash { conditions... }
+```
+
+```kdl
+"vcs" {
+    (d) name literal full { ".git"; ".svn"; ".hg"; ".bzr" }
+}
+
+"backups" {
+    name glob full { "*.bak"; "*~" }          // unannotated → any entry kind
+}
+
+"stray" {
+    (f,x,e) name glob full { "*" }            // empty executable files
+}
+
+"non-empty-plain" {
+    (file,-x,-e) name glob full { "*" }       // non-executable, non-empty files
+}
+
+"build_output" {
+    (d) bash { "${/} == target && -f CACHEDIR.TAG" }
+}
+```
+
+Rules:
+
+- Canonical style is annotation-then-space-then-name: `(d) name literal full`.
+  The constraint leads, the clause verb follows. The fused form `(d)name` and
+  inner padding `( d )` are equally legal KDL; docs and builtins use the spaced
+  form.
+- Spec fitness: KDL 2.0 defines a node-name annotation as "a context-specific
+  elaboration of the more generic type the node name indicates"
+  (`draft-marchan-kdl2.md` §Type Annotation) — precisely this use. Parsers
+  expose it directly (kdl-rs: `node.ty()`).
+- The annotation value is a comma-separated list of the nine type names or
+  their one-letter aliases, each optionally negated with a leading `-`. Bare
+  (unquoted) values are legal: per the spec's `identifier-char` grammar, commas
+  and hyphens are permitted (verified empirically against kdl-rs 6.5, including
+  `(-d)` and whitespace separation). Quoted forms also work.
+- List elements are independent predicates ANDed together. At most one
+  *positive structural* type (`f/d/l/s/p/b/c`); `x` and `e` are attribute
+  predicates. `-` inverts a predicate: `(-d)` is anything but a directory,
+  `(f,-e)` is non-empty files. A positive structural forbids negated
+  structurals in the same list (redundant or contradictory); `x,-x`-style
+  pairs and duplicate elements are errors.
+- **`x` is the pure exec-bit predicate in the KDL** — unlike CLI `-t x`, it
+  does not imply "regular file". Write `(f,x)` for that meaning (the docs and
+  builtins always do). `(d,x)` (traversable dir) means what it says.
+- Negative predicates are the logical NOT of the positives, so `(-d)` matches
+  entries whose file type cannot be determined; positives never do.
+- **No annotation means no type constraint**: the clause applies to every entry
+  kind, including unknown-file-type entries (which today can never match any
+  clause). No `any` keyword.
+- Migration: builtins, fixtures, and doc examples rewrite from
+  `dir name literal full` to `(d) name literal full`; the old bare-atom type
+  prefix is dropped from the grammar entirely.
+- Note for the parked scoping-controls sketch (Open Decisions): it also uses
+  annotations (`(local)` on set and `use` nodes). No conflict — different node
+  kinds — and it makes annotations the config format's general mechanism for
+  node metadata.
+- Future per-clause options (e.g. a case-sensitivity override) slot in as
+  properties (`key=value`) with no grammar change.
+
+Implementation: `EntryType` becomes a conjunction of signed predicates
+(`structural: Option<(Structural, bool)>`, `executable: Option<bool>`,
+`empty: Option<bool>` — `bool` = polarity); the clause parser reads
+`node.ty()` for the constraint, the node name for the clause kind, and
+positional args for pattern-kind/mode. An unannotated clause skips the
+`file_type()` lookup entirely.
 
 ### Implementation notes
 
@@ -325,23 +418,57 @@ while fd stays pure.
   pair).
 - `-m help` / `-M help`: **will not implement** — `help` is a plausible set name.
 - The f experience stays out of fd core: contrib script and/or documented alias.
+- Clause grammar: nodes named by subject (`name`/`path`) or `bash`; the entry-type
+  constraint is a KDL type annotation prefixing the node name —
+  `(file,-d,x,empty) name ...` — a CSV of optionally-`-`-negated type predicates,
+  AND semantics, `x` = pure exec bit. Canonical style is spaced:
+  `(d) name literal full`. An unannotated clause has no type constraint.
+  Bare-atom type prefixes and the interim `type=` property draft are dropped.
+  Negation is part of the spec (not deferred). Spec-sanctioned use: annotations
+  are "a context-specific elaboration of the more generic type the node name
+  indicates".
+- Matchset patterns compile **case-sensitive, always** — no `-s`/`-i`/smart-case
+  coupling (see Workstream 1, "Case sensitivity").
+- `.venv` lives in the builtin `package` set (already present in the sketch).
+- Set composition stays parked; direction and a scoping-controls sketch are recorded
+  under Open Decisions.
 
 ## Open Decisions
 
-1. **`.venv` placement**: the sketch omits it, but `f` excluded it by default.
-   Recommendation: add `".venv"` to the built-in `package` set (see Workstream 1).
-2. **Case sensitivity of matchset patterns** currently follows global `-s`/`-i`/smart
-   case at compile time — revisit soon (parked 2026-07-03). Current recommendation:
-   keep, consistent with search patterns.
-3. **Set composition syntax** (`use "vcs"` inside a set, enabling umbrella sets like
-   an f-style `metadata`) — revisit soon (parked 2026-07-03).
+1. **Set composition** (`use "name"` inside a set, enabling umbrella sets like an
+   f-style `metadata`) — parked 2026-07-03, to be revisited. Agreed direction when it
+   lands: `use` as a reserved child-node name, mixable with a set's own clauses;
+   resolve against the final layered registry (post-shadowing); validate the whole
+   assembled registry (unknown targets and cycles are hard errors); flatten at load
+   time; no builtin umbrella set.
+
+   Follow-on idea to evaluate alongside it — **scoping controls** via KDL type
+   annotations:
+
+   ```kdl
+   (local)"metadata" {          // don't expose this set to CLI selection
+       use (local)"package"     // don't look past the current unit (file)
+       use "noise"              // full scope resolution (final registry)
+       dir name literal full { ".venv" }
+   }
+   ```
+
+   Ordering: composition ships first; scoping controls are the milestone after it
+   (relative ordering, independent of this plan's M1–M5 numbering).
+
 
 ## Milestones
 
-1. **M1 — Matchsets complete**: built-ins (sketch taxonomy), `--matchset-file`,
-   `--list-matchsets`, `--no-user-matchsets` rename/rescope, provenance, shadowing.
-   Tests: embedded-KDL parse, layering/shadowing, `--no-user-matchsets` + builtin
-   selection, listing output.
+1. **M1 — Matchsets complete**: clause-grammar revision (subject-named nodes,
+   type-annotation constraints with negation, typeless clauses, builtin/fixture
+   migration), built-ins
+   (sketch taxonomy), `--matchset-file`, `--list-matchsets`, `--no-user-matchsets`
+   rename/rescope, provenance, shadowing, fixed case sensitivity (drop the
+   `case_sensitive` parameter). Tests: embedded-KDL parse, grammar
+   conjunction/negation/typeless cases and their validation errors
+   (double structural, `x,-x`, duplicates), layering/shadowing,
+   `--no-user-matchsets` + builtin selection, listing output, case-sensitive
+   matching regardless of `-i`/pattern casing.
 2. **M2 — Invariance net** (small; can precede or interleave with M1): config-isolation
    test, named base-case goldens.
 3. **M3 — Mini-helps**: `src/value_help.rs`, `or_help` combinator, post-parse checks.
