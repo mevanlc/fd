@@ -280,6 +280,78 @@ Windows.
 You may wish to include `.git/` in your `fd/ignore` file so that `.git` directories, and their contents
 are not included in output if you use the `--hidden` option.
 
+For reusable, *named* groups of exclusions that you opt into per invocation instead of
+permanently, see [matchsets](#matchsets) below.
+
+### Matchsets
+
+Matchsets are named, reusable groups of match rules. `fd` ships a few built-in sets and you can
+define your own. Nothing is applied by default — matchsets only take effect when selected on the
+command line.
+
+Use `-M` (or `--exclude-matchsets`) to exclude everything a set matches (matching directories are
+also not descended into), or `-m` (`--matchsets`) to show *only* entries matching a set:
+
+``` bash
+> fd -H -M vcs_meta …            # search hidden files, but hide .git/.svn/.hg/.bzr metadata
+> fd -M vcs_meta,package,noise … # several sets at once
+> fd -m package …                # show only package/environment directories
+```
+
+`--list-matchsets` shows every available set, where it is defined, and a summary of its rules.
+The built-in sets:
+
+| set | matches |
+|---|---|
+| `vcs_meta` | VCS metadata: `.git` (as a directory, or as a worktree/submodule pointer file), `.svn`, `.hg`, `.bzr` |
+| `build_output` | Rust `target` directories (with a `CACHEDIR.TAG`), Gradle `build` directories |
+| `cache` | `__pycache__`, `.cache` |
+| `package` | `node_modules`, `__pypackages__`, `.venv` |
+| `noise` | `.DS_Store` |
+| `trash` | OS trash locations: `~/.Trash`, `~/.local/share/Trash`, and `.Trashes`, `.Trash-*`, `$RECYCLE.BIN`, `System Volume Information` at volume roots |
+
+Selections are typically baked into a shell alias, so they can be *edited* by later occurrences
+of the same flag: a name with a trailing `-` removes that set from the selection again (a no-op
+if it was not selected), and a bare `-` clears the whole selection (long form:
+`--clear-matchsets` / `--clear-exclude-matchsets`):
+
+``` bash
+> alias f='fd -H -I -i -p -M vcs_meta,package,noise'
+> f -M package- …   # stop excluding package directories
+> f -M- …           # search absolutely everything
+> f -M-,noise …     # exclude only noise, whatever the alias says
+```
+
+See `devdocs/F-AS-ALIAS.md` for more on this "search everything" alias.
+
+#### Defining your own matchsets
+
+Matchsets are defined in [KDL](https://kdl.dev) in `~/.config/fd/matchsets.kdl` on macOS and
+Linux, `%APPDATA%\fd\matchsets.kdl` on Windows. Each set contains match clauses:
+
+``` kdl
+"scratch" {
+    (d) name literal full { "tmp"; "scratch" }  // directories named exactly tmp or scratch
+    (f) name glob full { "*.bak"; "*.orig" }    // backup files
+    (d) bash { "-f .skip-me" }                  // directories containing a .skip-me file
+}
+```
+
+A clause reads: an optional entry-type constraint in parentheses (`(d)` directories, `(f)` files,
+`(f,x)` executable files, `(-e)` non-empty entries, …), the subject to match (`name` or `path`),
+the pattern kind (`literal`, `glob`, or `regex`), and whether a pattern must match the whole
+subject (`full`) or any substring (`sub`). `bash` clauses instead take conditional expressions
+(see `fd --bash help` for the syntax). Matchset patterns are always case-sensitive.
+
+`path` patterns can be anchored to semantic locations: `$<home>/…` only matches relative to your
+home directory, and `$<vroot>/…` only relative to a volume root (mount point). This is how the
+built-in `trash` set matches `/Volumes/USB/.Trashes` without matching a directory merely *named*
+`.Trashes` deep inside some tree.
+
+Sets in the user file shadow same-named built-ins, and sets in files loaded with
+`--matchset-file <path>` shadow both; `--list-matchsets` shows which definition won.
+`--no-user-matchsets` skips the user file.
+
 ### Deleting files
 
 You can use `fd` to remove all files and directories that are matched by your search pattern.
@@ -306,46 +378,86 @@ No such file or directory"* errors in the `rm` call.
 ### Command-line options
 
 This is the output of `fd -h`. To see the full set of command-line options, use `fd --help` which
-also includes a much more detailed help text.
+also includes a much more detailed help text. Options with a compact value syntax also accept
+`help` as their value for a syntax cheat sheet, e.g. `fd -S help` or `fd --sort help`.
 
 ```
-Usage: fd [OPTIONS] [pattern [path]...]
+Usage: fd [OPTIONS] [pattern] [path]...
 
 Arguments:
   [pattern]  the search pattern (a regular expression, unless '--glob' is used; optional)
   [path]...  the root directories for the filesystem search (optional)
 
 Options:
-  -H, --hidden                     Search hidden files and directories
-  -I, --no-ignore                  Do not respect .(git|fd)ignore files
-  -s, --case-sensitive             Case-sensitive search (default: smart case)
-  -i, --ignore-case                Case-insensitive search (default: smart case)
-  -g, --glob                       Glob-based search (default: regular expression)
-  -a, --absolute-path              Show absolute instead of relative paths
-  -l, --list-details               Use a long listing format with metadata, similar to ls -l
-  -R, --sort <mMsS...>             Sort by time or size. Uppercase reverses sort. See --help for more.
-  -L, --follow                     Follow symbolic links
-  -p, --full-path                  Search full abs. path (default: filename only)
-  -d, --max-depth <depth>          Set maximum search depth (default: none)
-  -E, --exclude <glob>             Exclude entries that match the given glob pattern
-  -t, --type <filetype>            Filter by type: file (f), directory (d/dir), symlink (l),
-                                   executable (x), empty (e), socket (s), pipe (p), char-device
-                                   (c), block-device (b)
-  -e, --extension <ext>            Filter by extension
-  -S, --size <size>                Limit results based on the size of files
-      --changed-within <date|dur>  Filter by file modification time (newer than)
-      --changed-before <date|dur>  Filter by file modification time (older than)
-  -o, --owner <user:group>         Filter by owning user and/or group
-      --format <fmt>               Print results according to template
-  -x, --exec <cmd>...              Execute a command for each search result
-  -X, --exec-batch <cmd>...        Execute a command with all search results at once
-  -c, --color <when>               When to use colors [default: auto] [possible values: auto,
-                                   always, never]
-      --hyperlink[=<when>]         Add hyperlinks to output paths [default: never] [possible
-                                   values: auto, always, never]
-      --ignore-contain <name>      Ignore directories containing the named entry
-  -h, --help                       Print help (see more with '--help')
-  -V, --version                    Print version
+  -H, --hidden
+          Search hidden files and directories
+  -I, --no-ignore
+          Do not respect .(git|fd)ignore files
+  -s, --case-sensitive
+          Case-sensitive search (default: smart case)
+  -i, --ignore-case
+          Case-insensitive search (default: smart case)
+  -g, --glob
+          Glob-based search (default: regular expression)
+      --bash
+          Bash conditional expression search
+  -a, --absolute-path
+          Show absolute instead of relative paths
+  -l, --list-details
+          Use a long listing format with metadata, similar to ls -l
+  -R, --sort <mMsS...>
+          Sort by time or size. Uppercase reverses sort. See --help for more.
+  -L, --follow
+          Follow symbolic links
+  -p, --full-path
+          Search full abs. path (default: filename only)
+  -d, --max-depth <depth>
+          Set maximum search depth (default: none)
+  -E, --exclude <glob>
+          Exclude entries that match the given glob pattern
+  -m, --matchsets <set[,set...]>
+          Include entries matching named matchset(s)
+  -M, --exclude-matchsets <set[,set...]>
+          Exclude entries matching named matchset(s)
+      --matchset-file <path>
+          Load matchsets from a KDL file
+      --no-user-matchsets
+          Do not load the user matchset file
+      --list-matchsets
+          List available matchsets and exit
+  -t, --type <filetype>
+          Filter by type: file (f), directory (d/dir), symlink (l), executable (x), empty (e),
+          socket (s), pipe (p), char-device (c), block-device (b)
+  -e, --extension <ext>
+          Filter by extension
+  -S, --size <size>
+          Limit results based on the size of files
+      --changed-within <date|dur>
+          Filter by file modification time (newer than)
+      --changed-before <date|dur>
+          Filter by file modification time (older than)
+  -o, --owner <user:group>
+          Filter by owning user and/or group
+      --format <fmt>
+          Print results according to template
+      --summarize <summary-spec>
+          Print a summary of the search results
+  -x, --exec <cmd>...
+          Execute a command for each search result
+  -X, --exec-batch <cmd>...
+          Execute a command with all search results at once
+  -c, --color <when>
+          When to use colors [default: auto] [possible values: auto, always, never]
+      --hyperlink[=<when>]
+          Add hyperlinks to output paths [default: never] [possible values: auto, always, never]
+      --ignore-contain <name>
+          Ignore directories containing the named entry
+  -h, --help
+          Print help (see more with '--help')
+  -V, --version
+          Print version
+
+Many options accept 'help' as a value for details on their syntax (e.g. 'fd -S help').
 ```
 
 Note that options can be given after the pattern and/or path as well.

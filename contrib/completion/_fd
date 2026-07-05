@@ -120,6 +120,13 @@ _fd() {
 	"--prune-if=[don't traverse into directories that satisfy the bash conditional expression]:conditional expression"
 	"--exclude-if=[exclude entries that satisfy the bash conditional expression]:conditional expression"
 
+    + matchsets # named matchsets
+    '*'{-m+,--matchsets=}'[include only entries matching the named matchset(s)]:matchset names:->matchsets'
+    '*'{-M+,--exclude-matchsets=}'[exclude entries matching the named matchset(s)]:matchset names:->matchsets'
+    '*--matchset-file=[load matchsets from a KDL file]:matchset file:_files'
+    '--no-user-matchsets[do not load the user matchset file]'
+    '(: * -)--list-matchsets[list available matchsets and exit]'
+
     + filter-misc # filter search
     '*'{-t+,--type=}"[filter search by type]:type:(($fd_types))"
     '*'{-e+,--extension=}'[filter search by file extension]:extension'
@@ -237,6 +244,19 @@ _fd() {
           '\+[file size must be greater or equal to]'\
           '-[file size must be less than or equal to]' && ret=0
       fi
+      ;;
+
+    matchsets)
+      # Complete each name of a comma-separated list. A trailing '-' on a
+      # name (removal) and a bare '-' (clear) are also valid input here.
+      compset -P '*,'
+      local -a matchset_names
+      matchset_names=(
+        ${${${(f)"$(_call_program list-matchsets $words[1] --list-matchsets 2>/dev/null)"}[2,-1]}%%[[:space:]]*}
+      )
+      (( ${#matchset_names} )) ||
+        matchset_names=( vcs_meta build_output cache package noise trash )
+      _describe -t matchsets 'matchset name' matchset_names && ret=0
       ;;
   esac
 

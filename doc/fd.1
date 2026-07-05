@@ -40,6 +40,11 @@ to match all files. Or you can use the '\-\-search\-path' option to specify the 
 the positional parameter.
 .P
 Options may be given anywhere on the command line.
+.P
+Several options with a compact value syntax accept the literal value 'help' to
+print a cheat sheet for that option's syntax, e.g. 'fd \-S help'. These are:
+\&'\-t', '\-S', '\-R/\-\-sort', '\-\-changed\-within', '\-\-changed\-before',
+\&'\-\-summarize', '\-x', '\-X', '\-\-bash', '\-\-prune\-if', and '\-\-exclude\-if'.
 .SH OPTIONS
 .TP
 .B \-H, \-\-hidden
@@ -125,13 +130,13 @@ Cannot be used together with '\-\-glob' or '\-\-fixed\-strings'.
 .TP
 .B \-\-bash
 Treat the search pattern as a bash conditional expression. Expressions can use the fd placeholder
-variables '${}' (path), '${/}' (basename), '${//}' (parent), '${.}' (path without extension), and
-'${/.}' (basename without extension).
+variables '${}' (path), '${/}' (basename), '${//}' (parent), '${.}' (path without extension),
+and '${/.}' (basename without extension).
 .TP
 .BI "\-\-and " pattern
 Add additional required search patterns, all of which must be matched. Multiple additional
-patterns can be specified. The patterns are regular expressions, unless '\-\-glob',
-'\-\-fixed\-strings', or '\-\-bash' is used.
+patterns can be specified. The patterns are regular expressions,
+unless '\-\-glob', '\-\-fixed\-strings', or '\-\-bash' is used.
 .TP
 .B \-a, \-\-absolute\-path
 Shows the full path starting from the root as opposed to relative paths.
@@ -319,6 +324,46 @@ Examples:
 .BI "\-\-ignore-contain " name
 Exclude directories that (directly) contain the given name.
 This option can be specified multiple times.
+.TP
+.BI "\-m, \-\-matchsets " set[,set...]
+Only show entries that match at least one of the named matchsets (see the
+.B MATCHSETS
+section).
+.TP
+.BI "\-M, \-\-exclude\-matchsets " set[,set...]
+Exclude entries that match any of the named matchsets; matching directories are not
+traversed into (see the
+.B MATCHSETS
+section).
+
+Selections accumulate across '\-m'/'\-M' occurrences and later occurrences can edit them:
+a name with a trailing '\-' removes that set from the selection again (a no\-op if it was
+not selected), and a bare '\-' discards the selection accumulated so far. With an alias
+like \fIalias f='fd \-M vcs_meta,package,noise'\fR:
+.RS
+.IP
+f \-M package\-      # stop excluding package directories
+.IP
+f \-M\-              # exclude nothing
+.IP
+f \-M\-,noise        # exclude only noise
+.RE
+.IP
+The hidden flags '\-\-clear\-matchsets' and '\-\-clear\-exclude\-matchsets' are long
+spellings of the bare '\-'.
+.TP
+.BI "\-\-matchset\-file " path
+Load additional matchsets from a KDL file. Can be specified multiple times. Sets in later
+files shadow same\-named sets from earlier files, from the user matchset file, and from
+the built\-ins.
+.TP
+.B \-\-no\-user\-matchsets
+Do not load the user matchset file (see
+.BR FILES ).
+Built\-in matchsets and files given with '\-\-matchset\-file' remain available.
+.TP
+.B \-\-list\-matchsets
+List all available matchsets with their source and a summary of their clauses, then exit.
 .TP
 .BI "\-\-ignore-file " path
 Add a custom ignore-file in '.gitignore' format.
@@ -595,6 +640,47 @@ The regular expression syntax used by fd is documented here:
 The glob syntax is documented here:
 
     https://docs.rs/globset/#syntax
+.SH MATCHSETS
+A matchset is a named, reusable group of filesystem\-entry match rules. fd ships built\-in
+sets and users can define their own; nothing is applied unless selected
+with '\-m/\-\-matchsets' or '\-M/\-\-exclude\-matchsets'.
+.P
+The built\-in sets are \fBvcs_meta\fR (.git as a directory or worktree/submodule pointer
+file, .svn, .hg, .bzr), \fBbuild_output\fR (Rust target directories with a CACHEDIR.TAG,
+Gradle build directories), \fBcache\fR (__pycache__, .cache), \fBpackage\fR (node_modules,
+__pypackages__, .venv), \fBnoise\fR (.DS_Store), and \fBtrash\fR (OS trash locations,
+anchored to the home directory and to volume roots). Use '\-\-list\-matchsets' to see
+every available set with a summary of its rules.
+.P
+User matchsets are defined in KDL, in the user matchset file (see
+.BR FILES )
+or in files loaded with '\-\-matchset\-file'. Each set contains match clauses:
+.P
+.EX
+    "scratch" {
+        (d) name literal full { "tmp"; "scratch" }
+        (f) name glob full { "*.bak"; "*.orig" }
+        (d) bash { "\-f .skip\-me" }
+    }
+.EE
+.P
+A clause consists of an optional entry\-type constraint in parentheses ('(d)'
+directories, '(f)' files, '(f,x)' executable files, '(\-e)' non\-empty entries, ...),
+the subject to match ('name' or 'path'), the pattern kind ('literal', 'glob'
+or 'regex'), and whether a pattern must match the whole subject ('full') or any
+substring ('sub'), followed by a block of patterns. A 'bash' clause instead takes conditional
+expressions as used by '\-\-prune\-if' and '\-\-exclude\-if' (see 'fd \-\-bash help').
+Matchset patterns are always case\-sensitive.
+.P
+A 'path' pattern may start with a location variable: '$<home>/...' only matches relative
+to the user's home directory, and '$<vroot>/...' only matches relative to a volume root
+(mount point). Elsewhere in a pattern, '$' is literal; a leading literal '$<' is
+written '$$<'.
+.P
+Same\-named sets shadow each other: the user matchset file shadows built\-ins,
+and '\-\-matchset\-file' files shadow both (later files shadow earlier ones);
+the output of '\-\-list\-matchsets' shows which definition won. Set names may
+not end with '\-' (reserved for the selection\-editing syntax of '\-m'/'\-M').
 .SH ENVIRONMENT
 .TP
 .B LS_COLORS
@@ -622,6 +708,12 @@ if the --no-ignore-vcs option is used.
 Global ignore file. Unless ignore mode is turned off (such as with --no-ignore)
 ignore entries in this file will be ignored, as if it was an .fdignore file in the
 current directory.
+.TP
+.B $XDG_CONFIG_HOME/fd/matchsets.kdl
+User\-defined matchsets (see
+.BR MATCHSETS ).
+Only read when a matchset option is used on the command line; sets defined here
+shadow same\-named built\-in sets. Skipped entirely with '\-\-no\-user\-matchsets'.
 .SH EXAMPLES
 .TP
 .RI "Find files and directories that match the pattern '" needle "':"

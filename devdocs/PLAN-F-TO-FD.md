@@ -582,7 +582,16 @@ while fd stays pure.
    native-flag table; includes the PowerShell function replacing `f.ps1`).
    Remaining, in the `f` repo: archive it (point its README at
    F-AS-ALIAS.md) rather than replacing `f`/`f.ps1` with a remap.
-5. **M5 — Docs sweep**: README, man page, completions, CHANGELOG.
+5. **M5 — Docs sweep** *(landed 2026-07-05)*: README (matchsets section with
+   built-ins table, selection-undo grammar and the f alias, KDL clause
+   grammar, location variables, layering; refreshed `fd -h` dump; 'help'
+   value note; `-E` → matchsets pointer), man page (option entries, a
+   MATCHSETS section, matchsets.kdl in FILES, 'help' convention in
+   DESCRIPTION — plus a fix for roff dropping source lines that start with
+   an apostrophe, two of them pre-existing), zsh completion (`_fd`: flag
+   entries + set-name completion via `--list-matchsets` with a static
+   fallback; bash/fish/powershell are clap-generated and pick the flags up
+   automatically), CHANGELOG (matchsets, selection undo, mini-helps).
 
 Validation for every fd milestone:
 
