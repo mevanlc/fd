@@ -382,6 +382,15 @@ f() { fd -uu -p -i --exclude-matchsets vcs_meta,package,noise "$@"; }
 for users who want the defaults but not `f`'s single-letter grammar. The full wrapper
 and the documented alias are not exclusive; do both.
 
+**Superseded 2026-07-05**: the wrapper is retired; the alias *is* the f story
+(`devdocs/F-AS-ALIAS.md`). The `-m`/`-M` selection-undo grammar (trailing `-`,
+bare `-` clear) removed the last daily-use gap between alias and wrapper —
+old f's reversal letters (`-V`, `-M`, `-O`, `-G`, …) are now spelled inline
+(`-M vcs_meta-`, `-M-`, `--no-hidden`, `--ignore`). Keeping the wrapper meant
+maintaining ~300 fresh lines of bash grammar (and eventually a `f.ps1` again),
+which is exactly what this project set out to stop. The rewrite shipped
+briefly as `contrib/scripts/f` and is recoverable from git history.
+
 Alternatives considered for "the f experience" and rejected:
 
 - **argv[0] detection** (busybox-style `f` hardlink): requires reimplementing `f`'s
@@ -403,7 +412,7 @@ while fd stays pure.
 
 - README: matchset section (concept, KDL format, built-ins, layering, examples),
   mini-help convention, one-line pointer from the `--exclude` docs to `-M`, and an
-  f-style alias / shell-function suggestion (Workstream 4).
+  f-style alias / shell-function suggestion (condensed from `devdocs/F-AS-ALIAS.md`).
 - Man page (`doc/fd.1`): new flags and the `help`-value convention.
 - Shell completions: regenerate; consider completing built-in set names for `-m`/`-M`.
 - CHANGELOG: feature entries for matchsets (`-m/--matchsets`,
@@ -564,15 +573,15 @@ while fd stays pure.
    condexp — a non-empty-string test — so it must be intercepted before
    parsing). Tests: each topic exits 0 with expected stdout; `-x ./help`
    still execs; `fd help` still searches.
-4. **M4 — `f` wrapper rewrite** *(fd half landed 2026-07-03)*: the thin wrapper
-   ships as `contrib/scripts/f` (translation table above; ~290 lines, no vendored
-   scanner, no help text blocks — `help` values forward to fd). Verified against
-   the `f` repo's `test/run.sh` suite: all four grammar tests pass; the four
-   `-P` tests fail on old scanner-variable conditions and need migration.
-   Remaining, in the `f` repo: replace `f`/`f.ps1` with the thin remap, delete
-   `tools/`+`vendor/`, migrate or retire the `test_prune_if_*` conditions
-   (root-relative variables are not expressible in condexp), re-run
-   `tests/fd_compat` against this fork. Alias suggestion in docs: M5.
+4. **M4 — `f` wrapper rewrite** *(fd half landed 2026-07-03; wrapper retired
+   2026-07-05)*: the thin wrapper shipped as `contrib/scripts/f` (translation
+   table above; ~290 lines), verified against the `f` repo's grammar tests,
+   then retired once the `-m`/`-M` selection-undo grammar made the plain
+   alias competitive — see the superseded note in Workstream 4 and
+   `devdocs/F-AS-ALIAS.md` (alias + per-invocation undo + old-letter →
+   native-flag table; includes the PowerShell function replacing `f.ps1`).
+   Remaining, in the `f` repo: archive it (point its README at
+   F-AS-ALIAS.md) rather than replacing `f`/`f.ps1` with a remap.
 5. **M5 — Docs sweep**: README, man page, completions, CHANGELOG.
 
 Validation for every fd milestone:
