@@ -1427,6 +1427,137 @@ fn test_matchsets_no_user_matchsets_skips_user_file() {
 }
 
 #[test]
+fn test_matchsets_trailing_dash_removes_name_from_selection() {
+    let te = TestEnv::new(
+        &["node_modules"],
+        &["node_modules/package.json", ".DS_Store"],
+    );
+
+    // alias-style: exclusions baked in first, one undone by a later -M
+    let alias_args: &[&str] = &["--hidden", "--no-ignore", "-M", "package,noise"];
+
+    // package is excluded again...
+    te.assert_output(
+        &[alias_args, &["-M", "package-", "package.json"]].concat(),
+        "node_modules/package.json",
+    );
+    // ...while noise stays excluded
+    te.assert_output(&[alias_args, &["-M", "package-", "DS_Store"]].concat(), "");
+    // removing and re-adding within one selection works
+    te.assert_output(
+        &[
+            "--hidden",
+            "--no-ignore",
+            "-M",
+            "package,package-,package",
+            "package.json",
+        ],
+        "",
+    );
+    // removing a name that was never selected is a no-op ("ensure this is
+    // not excluded"), so callers don't need to know what an alias selected
+    te.assert_output(
+        &["--no-ignore", "-M", "package-", "package.json"],
+        "node_modules/package.json",
+    );
+    // ...but the removed name must still be a known matchset
+    te.assert_failure_with_error(
+        &["-M", "pakage-", "."],
+        "[fd error]: unknown matchset 'pakage'",
+    );
+}
+
+#[test]
+fn test_matchsets_clear_flags_reset_earlier_selections() {
+    let te = TestEnv::new(
+        &["node_modules"],
+        &["node_modules/package.json", ".DS_Store"],
+    );
+
+    te.assert_output(
+        &[
+            "--hidden",
+            "--no-ignore",
+            "-M",
+            "package,noise",
+            "--clear-exclude-matchsets",
+            "package.json",
+        ],
+        "node_modules/package.json",
+    );
+    // a -M after the clear starts a fresh selection
+    te.assert_output(
+        &[
+            "--hidden",
+            "--no-ignore",
+            "-M",
+            "package",
+            "--clear-exclude-matchsets",
+            "-M",
+            "noise",
+            "DS_Store",
+        ],
+        "",
+    );
+    te.assert_output(
+        &[
+            "--hidden",
+            "--no-ignore",
+            "-m",
+            "noise",
+            "--clear-matchsets",
+            "package.json",
+        ],
+        "node_modules/package.json",
+    );
+
+    // a bare '-' in the value list is shorthand for the clear flags
+    te.assert_output(
+        &[
+            "--hidden",
+            "--no-ignore",
+            "-M",
+            "package,noise",
+            "-M",
+            "-",
+            "package.json",
+        ],
+        "node_modules/package.json",
+    );
+    // clear-then-add in a single attached value: only noise stays excluded
+    te.assert_output(
+        &[
+            "--hidden",
+            "--no-ignore",
+            "-M",
+            "package",
+            "-M-,noise",
+            "package.json",
+        ],
+        "node_modules/package.json",
+    );
+    te.assert_output(
+        &[
+            "--hidden",
+            "--no-ignore",
+            "-M",
+            "package",
+            "-M-,noise",
+            "DS_Store",
+        ],
+        "",
+    );
+}
+
+#[test]
+fn test_matchsets_declared_names_must_not_end_with_hyphen() {
+    let te = TestEnv::new(&["src"], &["src/main.rs"])
+        .matchsets_file(r#""foo-" { (f) name glob full { "*.rs" } }"#);
+
+    te.assert_failure(&["-m", "foo", "."]);
+}
+
+#[test]
 fn test_matchsets_retired_flag_names_are_rejected() {
     let te = TestEnv::new(&["node_modules"], &["node_modules/package.json"]);
 

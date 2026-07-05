@@ -398,6 +398,9 @@ pub struct Opts {
     pub exclude_if: Option<String>,
 
     /// Include entries that match any of the named matchsets.
+    /// A name with a trailing '-' removes that name from the selection again
+    /// (useful for undoing a selection baked into a shell alias); a bare '-'
+    /// (or '--clear-matchsets') discards the whole selection made so far.
     #[arg(
         long = "matchsets",
         short = 'm',
@@ -409,7 +412,15 @@ pub struct Opts {
     )]
     pub matchsets: Vec<String>,
 
+    /// Discards all --matchsets selections made earlier on the command line
+    #[arg(long, overrides_with = "matchsets", hide = true, action = ArgAction::SetTrue)]
+    clear_matchsets: (),
+
     /// Exclude entries that match any of the named matchsets.
+    /// A name with a trailing '-' removes that name from the selection again
+    /// (useful for undoing a selection baked into a shell alias); a bare '-'
+    /// (or '--clear-exclude-matchsets') discards the whole selection made so
+    /// far.
     #[arg(
         long = "exclude-matchsets",
         short = 'M',
@@ -420,6 +431,10 @@ pub struct Opts {
         long_help
     )]
     pub exclude_matchsets: Vec<String>,
+
+    /// Discards all --exclude-matchsets selections made earlier on the command line
+    #[arg(long, overrides_with = "exclude_matchsets", hide = true, action = ArgAction::SetTrue)]
+    clear_exclude_matchsets: (),
 
     /// Load additional matchsets from a KDL file. Can be specified multiple
     /// times; sets in later files shadow same-named sets from earlier files,
@@ -1171,8 +1186,16 @@ fn command_is_bare_help(matches: &ArgMatches, id: &str) -> bool {
 
 fn parse_matchset_name(arg: &str) -> Result<String, String> {
     let name = arg.trim();
-    if name.is_empty() {
-        Err("matchset names must not be empty".to_string())
+    if name == "-" {
+        // Clear marker: discards the selection accumulated so far.
+        return Ok(name.to_string());
+    }
+    let base = name.strip_suffix('-').unwrap_or(name);
+    if base.is_empty() || base.ends_with('-') {
+        Err(format!(
+            "invalid matchset name '{arg}' (a name with a single trailing '-' \
+             removes that name from the selection)"
+        ))
     } else {
         Ok(name.to_string())
     }

@@ -382,9 +382,6 @@ pub fn load_selected(
     matchset_files: &[PathBuf],
     no_user_matchsets: bool,
 ) -> Result<SelectedMatchsets> {
-    validate_names(include_names)?;
-    validate_names(exclude_names)?;
-
     if include_names.is_empty() && exclude_names.is_empty() && matchset_files.is_empty() {
         return Ok(SelectedMatchsets {
             include: Vec::new(),
@@ -394,9 +391,14 @@ pub fn load_selected(
 
     let registry = Registry::assemble(matchset_files, no_user_matchsets)?;
 
+    // Every mentioned name must be a known set, even ones only removed
+    // again: a no-op removal is fine ("ensure this is not selected"), a
+    // misspelled one should fail loudly.
+    registry.validate_names(include_names.iter().chain(exclude_names))?;
+
     Ok(SelectedMatchsets {
-        include: registry.select(include_names)?,
-        exclude: registry.select(exclude_names)?,
+        include: registry.select(&resolve_selection(include_names)?)?,
+        exclude: registry.select(&resolve_selection(exclude_names)?)?,
     })
 }
 
@@ -448,13 +450,29 @@ pub fn print_list(matchset_files: &[PathBuf], no_user_matchsets: bool) -> Result
     Ok(())
 }
 
-fn validate_names(names: &[String]) -> Result<()> {
-    for name in names {
-        if name.trim().is_empty() {
+/// Fold a command-line selection left to right: a plain name adds the set
+/// (once), a name with a trailing '-' ensures it is not selected (a no-op if
+/// it never was, like rg's `-T`), and a bare '-' discards the selection
+/// accumulated so far. This lets a later `-m`/`-M` occurrence undo one baked
+/// into a shell alias without knowing what the alias selected.
+fn resolve_selection(names: &[String]) -> Result<Vec<String>> {
+    let mut selected: Vec<String> = Vec::new();
+    for raw in names {
+        let name = raw.trim();
+        if name == "-" {
+            selected.clear();
+        } else if let Some(base) = name.strip_suffix('-') {
+            if base.is_empty() {
+                bail!("matchset names must not be empty");
+            }
+            selected.retain(|n| n != base);
+        } else if name.is_empty() {
             bail!("matchset names must not be empty");
+        } else if !selected.iter().any(|n| n == name) {
+            selected.push(name.to_string());
         }
     }
-    Ok(())
+    Ok(selected)
 }
 
 fn user_matchsets_path() -> Option<PathBuf> {
@@ -521,6 +539,12 @@ impl Registry {
             if name.trim().is_empty() {
                 bail!("matchset names must not be empty");
             }
+            if name.ends_with('-') {
+                bail!(
+                    "matchset name '{name}' must not end with '-' \
+                     (reserved for removing a set from a command-line selection)"
+                );
+            }
             if node.ty().is_some() {
                 bail!("matchset '{name}' must not have a type annotation");
             }
@@ -567,6 +591,22 @@ impl Registry {
             }
             self.sets.insert(name, set);
         }
+    }
+
+    /// Check that every raw selection token names a known set, including
+    /// removals (`name-`); the bare '-' clear marker carries no name.
+    fn validate_names<'a>(&self, names: impl Iterator<Item = &'a String>) -> Result<()> {
+        for raw in names {
+            let name = raw.trim();
+            if name == "-" {
+                continue;
+            }
+            let base = name.strip_suffix('-').unwrap_or(name);
+            if !self.sets.contains_key(base) {
+                bail!("unknown matchset '{base}'");
+            }
+        }
+        Ok(())
     }
 
     fn select(&self, names: &[String]) -> Result<Vec<CompiledMatchset>> {
@@ -904,6 +944,59 @@ mod tests {
     #[test]
     fn rejects_old_type_prefix_grammar() {
         assert!(parse_registry(r#""s" { dir name literal full { "a" } }"#).is_err());
+    }
+
+    #[test]
+    fn rejects_set_names_with_trailing_hyphen() {
+        let err = parse_registry(r#""foo-" { (f) name literal full { "a" } }"#)
+            .err()
+            .expect("trailing-hyphen set name should be rejected");
+        assert!(err.to_string().contains("must not end with '-'"));
+    }
+
+    #[test]
+    fn resolve_selection_adds_dedups_removes_and_readds() {
+        let names = |list: &[&str]| list.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+
+        assert_eq!(
+            resolve_selection(&names(&["a", "b", "a", "a-"])).unwrap(),
+            names(&["b"])
+        );
+        assert_eq!(
+            resolve_selection(&names(&["a", "a-", "a"])).unwrap(),
+            names(&["a"])
+        );
+        assert!(resolve_selection(&names(&[])).unwrap().is_empty());
+        // a bare '-' clears the selection accumulated so far
+        assert_eq!(
+            resolve_selection(&names(&["a", "b", "-", "c"])).unwrap(),
+            names(&["c"])
+        );
+        assert!(resolve_selection(&names(&["a", "-"])).unwrap().is_empty());
+        // clearing an empty selection and removing an unselected name are
+        // both no-ops ("ensure not selected", like rg's -T)
+        assert!(resolve_selection(&names(&["-"])).unwrap().is_empty());
+        assert!(resolve_selection(&names(&["a-"])).unwrap().is_empty());
+        assert!(
+            resolve_selection(&names(&["a", "-", "a-"]))
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn registry_validates_removal_names() {
+        let registry = parse_registry(r#""real" { (f) name literal full { "a" } }"#).unwrap();
+
+        assert!(
+            registry
+                .validate_names(["real-".to_string()].iter())
+                .is_ok()
+        );
+        let err = registry
+            .validate_names(["bogus-".to_string()].iter())
+            .expect_err("unknown removal name should be rejected");
+        assert_eq!(err.to_string(), "unknown matchset 'bogus'");
     }
 
     #[test]

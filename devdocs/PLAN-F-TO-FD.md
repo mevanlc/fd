@@ -484,6 +484,39 @@ while fd stays pure.
 - **`trash` builtin added** (see Built-in sets): home- and vroot-anchored, in
   its own set rather than `noise`, opt-in for the `f` wrapper.
 
+## Decision Log (2026-07-05)
+
+- **Selection undo for `-m`/`-M`** — so an alias like
+  `alias f='fd -M vcs_meta,package,noise'` can be partially or fully unwound
+  at the prompt:
+  - **Trailing-dash negation**: `f -M package-` removes `package` from the
+    selection accumulated so far (left-to-right fold across all occurrences;
+    plain names add once, `name-` subtracts). Chosen over ripgrep's `!name`
+    (shell history expansion forces quoting) and a leading `-name` (needs
+    `allow_hyphen_values`, which lets a forgotten option value swallow the
+    next flag). Precedent: `apt-get install foo bar-`. Removal is
+    *idempotent* — `name-` means "ensure this is not selected", a no-op if it
+    never was (like rg's `-tpdf -Tpdf -Tpdf`); a strict not-in-selection
+    error was implemented first and rejected because it forces the caller to
+    know what an alias selected, defeating the feature. Typo safety comes
+    from registry validation instead: every mentioned name, including
+    removed ones, must be a *known* set (`-M pakage-` → "unknown matchset
+    'pakage'"). Set names declared in KDL must not end with `-` (load-time
+    error) so the selection syntax stays unambiguous.
+  - **Bare `-` clears**: a lone `-` list item discards the selection
+    accumulated so far (`f -M-` ≙ `--clear-exclude-matchsets`; `f -M-,noise`
+    = "exclude only noise"). clap accepts a lone `-` as an option value even
+    space-separated, so `-M -`, `-M-`, and `-M=-` all work; only a
+    dash-leading *list* in space form (`-M -,noise`) doesn't — use the
+    attached form. Empty-token spellings (`-M,,foo`) were rejected: an empty
+    list item stays a parse error so a stray comma can't silently clear the
+    selection.
+  - **`--clear-matchsets` / `--clear-exclude-matchsets`**: hidden
+    `overrides_with` flags (the `--no-hidden` idiom) that discard all earlier
+    occurrences of the paired flag; later occurrences start fresh. Named
+    `clear-` rather than `no-` because `no-` reads as disabling the feature
+    (and `--no-matchsets` is a retired spelling that must keep failing).
+
 ## Open Decisions
 
 1. **Set composition** (`use "name"` inside a set, enabling umbrella sets like an
