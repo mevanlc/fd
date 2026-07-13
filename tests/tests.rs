@@ -1689,7 +1689,7 @@ fn test_matchsets_list_builtins() {
         &["--list-matchsets"],
         "NAME          SOURCE   CLAUSES
         build_output  builtin  2 (d) bash
-        cache         builtin  2 (d) name literal full
+        cache         builtin  2 (d) name literal full, 1 (d) bash
         noise         builtin  1 (f) name literal full
         package       builtin  3 (d) name literal full
         trash         builtin  2 (d) path literal full, 3 (d) path literal full, 1 (d) path glob full
@@ -1928,7 +1928,7 @@ fn test_absolute_path() {
             {abs_path}/one/two/three/d.foo
             {abs_path}/one/two/three/directory_foo/
             {abs_path}/symlink",
-            abs_path = &abs_path
+            abs_path = abs_path
         ),
     );
 
@@ -1941,7 +1941,7 @@ fn test_absolute_path() {
             {abs_path}/one/two/C.Foo2
             {abs_path}/one/two/three/d.foo
             {abs_path}/one/two/three/directory_foo/",
-            abs_path = &abs_path
+            abs_path = abs_path
         ),
     );
 }
@@ -1960,7 +1960,7 @@ fn test_implicit_absolute_path() {
             {abs_path}/one/two/C.Foo2
             {abs_path}/one/two/three/d.foo
             {abs_path}/one/two/three/directory_foo/",
-            abs_path = &abs_path
+            abs_path = abs_path
         ),
     );
 }
@@ -1980,7 +1980,7 @@ fn test_normalized_absolute_path() {
             {abs_path}/one/two/C.Foo2
             {abs_path}/one/two/three/d.foo
             {abs_path}/one/two/three/directory_foo/",
-            abs_path = &abs_path
+            abs_path = abs_path
         ),
     );
 }
@@ -2351,7 +2351,7 @@ fn test_symlink_as_root() {
             {dir}/one/two/three/d.foo
             {dir}/one/two/three/directory_foo/
             {dir}/symlink",
-            dir = &parent_parent
+            dir = parent_parent
         ),
     );
 }
@@ -2371,7 +2371,7 @@ fn test_symlink_and_absolute_path() {
             {abs_path}/{expected_path}/three/
             {abs_path}/{expected_path}/three/d.foo
             {abs_path}/{expected_path}/three/directory_foo/",
-            abs_path = &abs_path,
+            abs_path = abs_path,
             expected_path = expected_path
         ),
     );
@@ -2389,7 +2389,7 @@ fn test_symlink_as_absolute_root() {
             {abs_path}/symlink/three/
             {abs_path}/symlink/three/d.foo
             {abs_path}/symlink/three/directory_foo/",
-            abs_path = &abs_path
+            abs_path = abs_path
         ),
     );
 }
@@ -2413,7 +2413,7 @@ fn test_symlink_and_full_path() {
             "{abs_path}/{expected_path}/three/
             {abs_path}/{expected_path}/three/d.foo
             {abs_path}/{expected_path}/three/directory_foo/",
-            abs_path = &abs_path,
+            abs_path = abs_path,
             expected_path = expected_path
         ),
     );
@@ -2434,7 +2434,7 @@ fn test_symlink_and_full_path_abs_path() {
             "{abs_path}/symlink/three/
             {abs_path}/symlink/three/d.foo
             {abs_path}/symlink/three/directory_foo/",
-            abs_path = &abs_path
+            abs_path = abs_path
         ),
     );
 }
@@ -2563,7 +2563,7 @@ fn test_exec() {
                 {abs_path}/one/two/c.foo
                 {abs_path}/one/two/three/d.foo
                 {abs_path}/one/two/three/directory_foo",
-                abs_path = &abs_path
+                abs_path = abs_path
             ),
         );
 
@@ -2662,7 +2662,7 @@ fn test_exec_multi() {
                 test c.foo
                 test d.foo
                 test directory_foo",
-            abs_path = &abs_path
+            abs_path = abs_path
         ),
     );
 
@@ -2718,7 +2718,7 @@ fn test_exec_batch() {
             &["--absolute-path", "foo", "--exec-batch", "echo"],
             &format!(
                 "{abs_path}/a.foo {abs_path}/one/b.foo {abs_path}/one/two/C.Foo2 {abs_path}/one/two/c.foo {abs_path}/one/two/three/d.foo {abs_path}/one/two/three/directory_foo",
-                abs_path = &abs_path
+                abs_path = abs_path
             ),
         );
 
@@ -3492,7 +3492,7 @@ fn test_base_directory() {
 
     // Ignore base directory when absolute path is used
     let (te, abs_path) = get_test_env_with_abs_path(DEFAULT_DIRS, DEFAULT_FILES);
-    let abs_base_dir = &format!("{abs_path}/one/two/", abs_path = &abs_path);
+    let abs_base_dir = &format!("{abs_path}/one/two/", abs_path = abs_path);
     te.assert_output(
         &["--base-directory", abs_base_dir, "foo", &abs_path],
         &format!(
@@ -3502,7 +3502,7 @@ fn test_base_directory() {
             {abs_path}/one/two/C.Foo2
             {abs_path}/one/two/three/d.foo
             {abs_path}/one/two/three/directory_foo/",
-            abs_path = &abs_path
+            abs_path = abs_path
         ),
     );
 }
@@ -3721,6 +3721,19 @@ fn test_opposing(flag: &str, opposing_flags: &[&str]) {
         opposing_flags.join(" "),
         flag
     );
+}
+
+/// --no-full-path restores filename-only matching after a --full-path
+/// (e.g. one baked into a shell alias). Uses an anchored pattern because
+/// the generic opposing-flags test's '.' pattern matches either way.
+#[test]
+fn test_no_full_path_overrides_full_path() {
+    let te = TestEnv::new(DEFAULT_DIRS, DEFAULT_FILES);
+
+    // Under --full-path the pattern is matched against the absolute path,
+    // so a filename-anchored pattern finds nothing.
+    te.assert_output(&["--full-path", "^a\\.foo$"], "");
+    te.assert_output(&["--full-path", "--no-full-path", "^a\\.foo$"], "a.foo");
 }
 
 /// Print error if search pattern starts with a dot and --hidden is not set

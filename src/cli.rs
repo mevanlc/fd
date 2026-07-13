@@ -293,7 +293,7 @@ pub struct Opts {
     #[arg(long, overrides_with = "follow", hide = true, action = ArgAction::SetTrue)]
     no_follow: (),
 
-    /// By default, the search pattern is only matched against the filename (or directory name). Using this flag, the pattern is matched against the full (absolute) path. Example:
+    /// By default, the search pattern is only matched against the filename (or directory name). Using this flag, the pattern is matched against the full (absolute) path. The flag can be overridden with --no-full-path. Example:
     ///   fd --glob -p '**/.git/config'
     #[arg(
         long,
@@ -303,6 +303,10 @@ pub struct Opts {
         verbatim_doc_comment
     )]
     pub full_path: bool,
+
+    /// Overrides --full-path
+    #[arg(long, overrides_with = "full_path", hide = true, action = ArgAction::SetTrue)]
+    no_full_path: (),
 
     /// Separate search results by the null character (instead of newlines).
     /// Useful for piping results to 'xargs'.

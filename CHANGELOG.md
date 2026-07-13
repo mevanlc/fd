@@ -16,6 +16,7 @@
 - Many options with a compact value syntax (`-t`, `-S`, `-R`/`--sort`, `--changed-within`,
   `--changed-before`, `--summarize`, `-x`, `-X`, `--bash`, `--prune-if`, `--exclude-if`)
   now accept the literal value `help` to print a cheat sheet for that option's syntax.
+- Add `--no-full-path` to override `-p`/`--full-path`, e.g. one baked into a shell alias.
 
 ## Bugfixes
 - Sanitize control characters and bidirectional override characters in filenames
