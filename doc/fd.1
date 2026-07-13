@@ -668,7 +668,7 @@ A clause consists of an optional entry\-type constraint in parentheses ('(d)'
 directories, '(f)' files, '(f,x)' executable files, '(\-e)' non\-empty entries, ...),
 the subject to match ('name' or 'path'), the pattern kind ('literal', 'glob'
 or 'regex'), and whether a pattern must match the whole subject ('full') or any
-substring ('sub'), followed by a block of patterns. A 'bash' clause instead takes conditional
+substring ('partial'), followed by a block of patterns. A 'bash' clause instead takes conditional
 expressions as used by '\-\-prune\-if' and '\-\-exclude\-if' (see 'fd \-\-bash help').
 Matchset patterns are always case\-sensitive.
 .P

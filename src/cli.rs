@@ -443,6 +443,10 @@ pub struct Opts {
     /// Load additional matchsets from a KDL file. Can be specified multiple
     /// times; sets in later files shadow same-named sets from earlier files,
     /// the user matchset file, and the built-ins.
+    ///
+    /// Name and path clauses use the form
+    /// '<name|path> <literal|glob|regex> <full|partial>', followed by a block
+    /// of patterns.
     #[arg(
         long = "matchset-file",
         value_name = "path",

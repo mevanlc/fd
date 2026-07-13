@@ -92,7 +92,7 @@ enum Subject {
 #[derive(Copy, Clone)]
 enum Mode {
     Full,
-    Sub,
+    Partial,
 }
 
 #[derive(Copy, Clone)]
@@ -359,7 +359,7 @@ impl Mode {
     fn parse(value: &str) -> Result<Self> {
         match value {
             "full" => Ok(Self::Full),
-            "sub" => Ok(Self::Sub),
+            "partial" => Ok(Self::Partial),
             _ => bail!("invalid matchset mode '{value}'"),
         }
     }
@@ -629,7 +629,7 @@ impl Registry {
 }
 
 /// Parse one clause node of the form
-/// `[(<constraint>)] <name|path> <literal|glob|regex> <full|sub> { patterns }`
+/// `[(<constraint>)] <name|path> <literal|glob|regex> <full|partial> { patterns }`
 /// or `[(<constraint>)] bash { conditions }` into one compiled clause per
 /// pattern, plus a human-readable summary for `--list-matchsets`.
 fn parse_clause_group(
@@ -683,7 +683,7 @@ fn parse_clause_group(
             let atoms = clause_atoms(node)?;
             let [pattern_kind, mode] = atoms.as_slice() else {
                 bail!(
-                    "'{subject_name}' clause in set '{set_name}' must be '{subject_name} <literal|glob|regex> <full|sub>'"
+                    "'{subject_name}' clause in set '{set_name}' must be '{subject_name} <literal|glob|regex> <full|partial>'"
                 );
             };
             let summary = format!(
@@ -766,7 +766,7 @@ fn compile_clause_pattern(
     if matches!(subject, Subject::Name) {
         bail!("location variable '$<{variable}>' is only allowed in 'path' clauses");
     }
-    if matches!(mode, Mode::Sub) {
+    if matches!(mode, Mode::Partial) {
         bail!("location variable '$<{variable}>' requires 'full' mode");
     }
     if matches!(pattern_kind, PatternKind::Regex) {
@@ -851,7 +851,7 @@ fn compile_matcher(pattern: &str, pattern_kind: PatternKind, mode: Mode) -> Resu
         PatternKind::Literal => {
             let regex = match mode {
                 Mode::Full => format!("^{}$", regex::escape(pattern)),
-                Mode::Sub => regex::escape(pattern),
+                Mode::Partial => regex::escape(pattern),
             };
             build_regex(&regex).map(Matcher::Regex)
         }
@@ -862,7 +862,7 @@ fn compile_matcher(pattern: &str, pattern_kind: PatternKind, mode: Mode) -> Resu
         PatternKind::Regex => {
             let regex = match mode {
                 Mode::Full => format!("^(?:{pattern})$"),
-                Mode::Sub => pattern.to_string(),
+                Mode::Partial => pattern.to_string(),
             };
             build_regex(&regex).map(Matcher::Regex)
         }
@@ -916,7 +916,7 @@ mod tests {
             "s" {
                 (d) name literal full { "a" }
                 (f,x,e) name glob full { "*" }
-                (file,-empty) path regex sub { "b" }
+                (file,-empty) path regex partial { "b" }
                 (-d,-l) name literal full { "c" }
                 name literal full { "d" }
                 (d) bash { "-f CACHEDIR.TAG" }
@@ -1043,8 +1043,8 @@ mod tests {
             ("path literal full", "$<home>//x"),
             // name clauses cannot anchor
             ("name literal full", "$<home>/.Trash"),
-            // sub mode contradicts anchoring
-            ("path literal sub", "$<home>/.Trash"),
+            // partial mode contradicts anchoring
+            ("path literal partial", "$<home>/.Trash"),
             // regex tails are not supported
             ("path regex full", "$<home>/.+"),
         ] {

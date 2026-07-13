@@ -340,7 +340,7 @@ Linux, `%APPDATA%\fd\matchsets.kdl` on Windows. Each set contains match clauses:
 A clause reads: an optional entry-type constraint in parentheses (`(d)` directories, `(f)` files,
 `(f,x)` executable files, `(-e)` non-empty entries, …), the subject to match (`name` or `path`),
 the pattern kind (`literal`, `glob`, or `regex`), and whether a pattern must match the whole
-subject (`full`) or any substring (`sub`). `bash` clauses instead take conditional expressions
+subject (`full`) or any substring (`partial`). `bash` clauses instead take conditional expressions
 (see `fd --bash help` for the syntax). Matchset patterns are always case-sensitive.
 
 `path` patterns can be anchored to semantic locations: `$<home>/…` only matches relative to your

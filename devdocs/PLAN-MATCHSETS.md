@@ -65,7 +65,7 @@ The fields mean:
 ```text
 type:    file, dir, symlink, executable, empty, socket, pipe, block-device, char-device
 subject: name, path
-mode:    full, sub
+mode:    full, partial
 pattern: literal, glob, regex, bash
 ```
 
@@ -143,7 +143,7 @@ Use existing behavior where possible:
 - `name` subject should use the entry basename, like the default search path at `src/walk.rs`.
 - `path` subject should use the normalized path form chosen for matchset semantics, preferably relative to the search root for config portability.
 - `literal full` is exact equality.
-- `literal sub` is substring containment.
+- `literal partial` is substring containment.
 - `glob` should use `globset`.
 - `regex` should use `regex::bytes::Regex` and respect `fd` case sensitivity unless the matchset syntax later grows a per-clause override.
 - `bash` should reuse `bash_cond::parse_expr` and `bash_cond::evaluate`.
