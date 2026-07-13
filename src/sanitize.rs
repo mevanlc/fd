@@ -26,12 +26,21 @@ fn needs_escape(c: char) -> bool {
 /// Returns a `Cow<str>` borrowing `s` when no escaping is needed, otherwise an owned
 /// escaped copy. Use this when an owned `&str`/`String` is required (e.g. ANSI paint).
 pub fn sanitize_for_terminal(s: &str) -> Cow<'_, str> {
-    if !s.chars().any(needs_escape) {
+    sanitize_for_terminal_with(s, needs_escape)
+}
+
+/// Sanitize formatted text while preserving its intentional line layout.
+pub fn sanitize_multiline_for_terminal(s: &str) -> Cow<'_, str> {
+    sanitize_for_terminal_with(s, |c| c != '\n' && needs_escape(c))
+}
+
+fn sanitize_for_terminal_with(s: &str, should_escape: impl Fn(char) -> bool) -> Cow<'_, str> {
+    if !s.chars().any(&should_escape) {
         return Cow::Borrowed(s);
     }
     let mut out = String::with_capacity(s.len());
     for c in s.chars() {
-        if needs_escape(c) {
+        if should_escape(c) {
             let v = c as u32;
             if v <= 0xFF {
                 let _ = write!(out, "\\x{v:02X}");
@@ -109,6 +118,14 @@ mod tests {
     #[test]
     fn strips_newline() {
         assert_eq!(sanitize_for_terminal("a\nb"), "a\\x0Ab");
+    }
+
+    #[test]
+    fn multiline_preserves_layout_but_escapes_terminal_controls() {
+        assert_eq!(
+            sanitize_multiline_for_terminal("first\nsecond\x1b[31m"),
+            "first\nsecond\\x1B[31m"
+        );
     }
 
     #[test]

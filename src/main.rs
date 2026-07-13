@@ -70,7 +70,7 @@ fn main() {
             exit_code.exit();
         }
         Err(err) => {
-            crate::error::print_error(format!("{err:#}"));
+            crate::error::print_error_multiline(format!("{err:#}"));
             ExitCode::GeneralError.exit();
         }
     }
