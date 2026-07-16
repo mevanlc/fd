@@ -44,7 +44,7 @@
     }
 }
 
-"noise" {
+"os_meta" {
     (f) name literal full {
         ".DS_Store"
     }

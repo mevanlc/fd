@@ -13,7 +13,7 @@ pattern modes anchor over that entire haystack. Both become footguns the
 moment `-p` is baked into an alias (see `F-AS-ALIAS.md`):
 
 ```sh
-alias f='fd -H -I -i -p -M vcs_meta,package,noise'
+alias f='fd -H -I -i -p -M vcs_meta,package,os_meta'
 
 f --exact .git      # nothing: ^\.git$ must equal /Users/me/repo/.git
 f -g '*.lock'       # nothing: the glob must span the whole absolute path
@@ -195,7 +195,7 @@ Once landed, `F-AS-ALIAS.md`'s recommended alias swaps `-p` for
 `--partial-path`:
 
 ```sh
-alias f='fd -H -I -i --partial-path -M vcs_meta,package,noise'
+alias f='fd -H -I -i --partial-path -M vcs_meta,package,os_meta'
 ```
 
 - No behavior change for plain-regex muscle memory (partial ≡ full there,

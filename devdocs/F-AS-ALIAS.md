@@ -9,15 +9,15 @@ whole tool reduces to an alias.
 
 ```sh
 # bash / zsh
-alias f='fd -H -I -i -p -M vcs_meta,package,noise'
+alias f='fd -H -I -i -p -M vcs_meta,package,os_meta'
 
 # or as a function (plays nicer with completion wrappers)
-f() { fd -H -I -i -p -M vcs_meta,package,noise "$@"; }
+f() { fd -H -I -i -p -M vcs_meta,package,os_meta "$@"; }
 ```
 
 ```powershell
 # PowerShell (replaces f.ps1)
-function f { fd -H -I -i -p -M vcs_meta,package,noise @args }
+function f { fd -H -I -i -p -M vcs_meta,package,os_meta @args }
 ```
 
 What the defaults mean:
@@ -28,7 +28,7 @@ What the defaults mean:
 | `-I` | ignore the ignore files (`.gitignore`, `.fdignore`, …) |
 | `-i` | case-insensitive (fd's default is smart case) |
 | `-p` | match the pattern against the full path, not just the basename |
-| `-M vcs_meta,package,noise` | exclude the built-in matchsets: VCS metadata (`.git`, `.svn`, `.hg`, `.bzr`), package/env dirs (`node_modules`, `__pypackages__`, `.venv`), and OS noise (`.DS_Store`) |
+| `-M vcs_meta,package,os_meta` | exclude the built-in matchsets: VCS metadata (`.git`, `.svn`, `.hg`, `.bzr`), package/env dirs (`node_modules`, `__pypackages__`, `.venv`), and OS metadata (`.DS_Store`) |
 
 `-H -I` can also be spelled `-uu`. Add `trash` to the exclusion list if you
 want OS trash locations (`~/.Trash`, `$RECYCLE.BIN`, `.Trash-*`, …) hidden
@@ -55,7 +55,7 @@ occurrences, so a later value edits the alias's list:
 |---|---|
 | stop excluding one set | `-M package-` (trailing `-` removes; idempotent, like rg's `-T`) |
 | exclude nothing — search absolutely everything | `-M-` (bare `-` clears the selection) |
-| exclude *only* noise, whatever the alias says | `-M-,noise` (clear, then add) |
+| exclude *only* OS metadata, whatever the alias says | `-M-,os_meta` (clear, then add) |
 | also exclude another set | `-M trash` |
 
 Long spellings of the clear: `--clear-matchsets` /
@@ -63,7 +63,7 @@ Long spellings of the clear: `--clear-matchsets` /
 mentioned name, even one only removed, must be a known matchset.
 
 Note the one clap parsing quirk: a *list* starting with `-` must use the
-attached or `=` form (`-M-,noise` or `-M=-,noise`, not `-M -,noise`),
+attached or `=` form (`-M-,os_meta` or `-M=-,os_meta`, not `-M -,os_meta`),
 because a space-separated value may not begin with a dash. A lone `-` is
 fine in any form.
 
@@ -79,7 +79,7 @@ native spellings:
 | `-n` (basenames only) | `--no-full-path` |
 | `-C` | `-s` |
 | `-V` (show VCS metadata) | `-M vcs_meta-` |
-| `-M` (show package dirs) | `-M package-,noise-` |
+| `-M` (show package dirs) | `-M package-,os_meta-` |
 | `-f` / `-r` / `-b` | `-tf` / `-td` / `-tx` |
 | `-w <pat>` | `--and <pat>` |
 | `-P <cond>` | `--exclude-if <cond>` |

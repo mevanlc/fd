@@ -339,14 +339,14 @@ section).
 Selections accumulate across '\-m'/'\-M' occurrences and later occurrences can edit them:
 a name with a trailing '\-' removes that set from the selection again (a no\-op if it was
 not selected), and a bare '\-' discards the selection accumulated so far. With an alias
-like \fIalias f='fd \-M vcs_meta,package,noise'\fR:
+like \fIalias f='fd \-M vcs_meta,package,os_meta'\fR:
 .RS
 .IP
 f \-M package\-      # stop excluding package directories
 .IP
 f \-M\-              # exclude nothing
 .IP
-f \-M\-,noise        # exclude only noise
+f \-M\-,os_meta      # exclude only OS metadata
 .RE
 .IP
 The hidden flags '\-\-clear\-matchsets' and '\-\-clear\-exclude\-matchsets' are long
@@ -648,7 +648,7 @@ with '\-m/\-\-matchsets' or '\-M/\-\-exclude\-matchsets'.
 The built\-in sets are \fBvcs_meta\fR (.git as a directory or worktree/submodule pointer
 file, .svn, .hg, .bzr), \fBbuild_output\fR (Rust target directories with a CACHEDIR.TAG,
 Gradle build directories), \fBcache\fR (__pycache__, .cache), \fBpackage\fR (node_modules,
-__pypackages__, .venv), \fBnoise\fR (.DS_Store), and \fBtrash\fR (OS trash locations,
+__pypackages__, .venv), \fBos_meta\fR (.DS_Store), and \fBtrash\fR (OS trash locations,
 anchored to the home directory and to volume roots). Use '\-\-list\-matchsets' to see
 every available set with a summary of its rules.
 .P

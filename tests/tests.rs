@@ -1434,14 +1434,14 @@ fn test_matchsets_trailing_dash_removes_name_from_selection() {
     );
 
     // alias-style: exclusions baked in first, one undone by a later -M
-    let alias_args: &[&str] = &["--hidden", "--no-ignore", "-M", "package,noise"];
+    let alias_args: &[&str] = &["--hidden", "--no-ignore", "-M", "package,os_meta"];
 
     // package is excluded again...
     te.assert_output(
         &[alias_args, &["-M", "package-", "package.json"]].concat(),
         "node_modules/package.json",
     );
-    // ...while noise stays excluded
+    // ...while OS metadata stays excluded
     te.assert_output(&[alias_args, &["-M", "package-", "DS_Store"]].concat(), "");
     // removing and re-adding within one selection works
     te.assert_output(
@@ -1479,7 +1479,7 @@ fn test_matchsets_clear_flags_reset_earlier_selections() {
             "--hidden",
             "--no-ignore",
             "-M",
-            "package,noise",
+            "package,os_meta",
             "--clear-exclude-matchsets",
             "package.json",
         ],
@@ -1494,7 +1494,7 @@ fn test_matchsets_clear_flags_reset_earlier_selections() {
             "package",
             "--clear-exclude-matchsets",
             "-M",
-            "noise",
+            "os_meta",
             "DS_Store",
         ],
         "",
@@ -1504,7 +1504,7 @@ fn test_matchsets_clear_flags_reset_earlier_selections() {
             "--hidden",
             "--no-ignore",
             "-m",
-            "noise",
+            "os_meta",
             "--clear-matchsets",
             "package.json",
         ],
@@ -1517,21 +1517,21 @@ fn test_matchsets_clear_flags_reset_earlier_selections() {
             "--hidden",
             "--no-ignore",
             "-M",
-            "package,noise",
+            "package,os_meta",
             "-M",
             "-",
             "package.json",
         ],
         "node_modules/package.json",
     );
-    // clear-then-add in a single attached value: only noise stays excluded
+    // clear-then-add in a single attached value: only OS metadata stays excluded
     te.assert_output(
         &[
             "--hidden",
             "--no-ignore",
             "-M",
             "package",
-            "-M-,noise",
+            "-M-,os_meta",
             "package.json",
         ],
         "node_modules/package.json",
@@ -1542,7 +1542,7 @@ fn test_matchsets_clear_flags_reset_earlier_selections() {
             "--no-ignore",
             "-M",
             "package",
-            "-M-,noise",
+            "-M-,os_meta",
             "DS_Store",
         ],
         "",
@@ -1579,7 +1579,7 @@ fn test_matchsets_builtins_available_without_user_file() {
     );
 
     te.assert_output(
-        &["--hidden", "--no-ignore", "-m", "package,noise", "."],
+        &["--hidden", "--no-ignore", "-m", "package,os_meta", "."],
         ".DS_Store
         .venv/
         node_modules/",
@@ -1606,11 +1606,11 @@ fn test_matchsets_builtin_vcs_meta_excludes_git_dir_and_pointer_file() {
 #[test]
 fn test_matchsets_user_file_shadows_builtin() {
     let te = TestEnv::new(&["node_modules"], &[".DS_Store"])
-        .matchsets_file(r#""noise" { (d) name literal full { "node_modules" } }"#);
+        .matchsets_file(r#""os_meta" { (d) name literal full { "node_modules" } }"#);
 
-    // the user definition of 'noise' wins over the builtin (.DS_Store)...
+    // the user definition of 'os_meta' wins over the builtin (.DS_Store)...
     te.assert_output(
-        &["--hidden", "--no-ignore", "-m", "noise", "."],
+        &["--hidden", "--no-ignore", "-m", "os_meta", "."],
         "node_modules/",
     );
     // ...while unshadowed builtins remain available
@@ -1640,10 +1640,10 @@ fn test_matchsets_matchset_file_flag() {
 #[test]
 fn test_matchsets_matchset_file_shadows_user_file() {
     let te = TestEnv::new(&["node_modules"], &[".DS_Store"])
-        .matchsets_file(r#""noise" { (f) name literal full { ".DS_Store" } }"#);
+        .matchsets_file(r#""os_meta" { (f) name literal full { ".DS_Store" } }"#);
     fs::write(
         te.test_root().join("sets.kdl"),
-        r#""noise" { (d) name literal full { "node_modules" } }"#,
+        r#""os_meta" { (d) name literal full { "node_modules" } }"#,
     )
     .unwrap();
 
@@ -1654,7 +1654,7 @@ fn test_matchsets_matchset_file_shadows_user_file() {
             "--matchset-file",
             "sets.kdl",
             "-m",
-            "noise",
+            "os_meta",
             ".",
         ],
         "node_modules/",
@@ -1666,7 +1666,7 @@ fn test_matchsets_no_user_matchsets_keeps_builtins() {
     let te = TestEnv::new(&["node_modules"], &[".DS_Store"]).matchsets_file("not kdl [[[");
 
     // a broken user matchset file fails selection...
-    te.assert_failure(&["-m", "noise", "."]);
+    te.assert_failure(&["-m", "os_meta", "."]);
     // ...but --no-user-matchsets is the escape hatch: builtins still work
     te.assert_output(
         &[
@@ -1674,7 +1674,7 @@ fn test_matchsets_no_user_matchsets_keeps_builtins() {
             "--no-ignore",
             "--no-user-matchsets",
             "-m",
-            "noise",
+            "os_meta",
             ".",
         ],
         ".DS_Store",
@@ -1690,7 +1690,7 @@ fn test_matchsets_list_builtins() {
         "NAME          SOURCE   CLAUSES
         build_output  builtin  2 (d) bash
         cache         builtin  2 (d) name literal full, 1 (d) bash
-        noise         builtin  1 (f) name literal full
+        os_meta       builtin  1 (f) name literal full
         package       builtin  3 (d) name literal full
         trash         builtin  2 (d) path literal full, 3 (d) path literal full, 1 (d) path glob full
         vcs_meta      builtin  4 (d) name literal full, 1 (f) name literal full",

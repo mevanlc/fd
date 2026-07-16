@@ -138,21 +138,21 @@ The built-in registry is the taxonomy in
 "build_output" { (d) bash { /* target + CACHEDIR.TAG, gradle build dirs */ } }
 "cache"        { (d) name literal full { "__pycache__"; ".cache" } }
 "package"      { (d) name literal full { "node_modules"; "__pypackages__"; ".venv" } }
-"noise"        { (f) name literal full { ".DS_Store" } }
+"os_meta"      { (f) name literal full { ".DS_Store" } }
 "trash"        { (d) path literal full { "$<home>/.Trash"; "$<home>/.local/share/Trash" }
                  (d) path literal full { "$<vroot>/.Trashes"; "$<vroot>/$RECYCLE.BIN";
                                          "$<vroot>/System Volume Information" }
                  (d) path glob full { "$<vroot>/.Trash-*" } }
 ```
 
-`trash` (added 2026-07-04) is a separate set, not part of `noise`: `noise` stays
+`trash` (added 2026-07-04) is a separate set, not part of `os_meta`: `os_meta` stays
 "metadata litter files" so the `f` wrapper's default
-(`--exclude-matchsets vcs_meta,package,noise`) keeps old `f` behavior; trash
+(`--exclude-matchsets vcs_meta,package,os_meta`) keeps old `f` behavior; trash
 exclusion is opt-in via `-M trash`.
 
 `.venv` lives in `package` (resolved 2026-07-03; already present in the sketch) — a
 virtualenv is installed packages, the direct analog of `__pypackages__`. `f`'s default
-exclusions therefore map to `--exclude-matchsets vcs_meta,package,noise` with zero config
+exclusions therefore map to `--exclude-matchsets vcs_meta,package,os_meta` with zero config
 (the extra `__pypackages__`/`.bzr` coverage is in `f`'s spirit).
 
 Umbrella sets (e.g. an f-style `metadata` grouping) wait for set composition
@@ -351,13 +351,13 @@ translation table:
 
 | `f` | native fd |
 |---|---|
-| (default) | `-uu -p -i --exclude-matchsets vcs_meta,package,noise` |
+| (default) | `-uu -p -i --exclude-matchsets vcs_meta,package,os_meta` |
 | `-O` | drop `-H` from defaults |
 | `-G` | drop `-I` from defaults |
 | `-n` | drop `-p` from defaults |
 | `-C` | `-s` instead of `-i` |
 | `-V` | drop `vcs_meta` from default `--exclude-matchsets` |
-| `-M` | drop `package,noise` from default `--exclude-matchsets` |
+| `-M` | drop `package,os_meta` from default `--exclude-matchsets` |
 | `-f` / `-r` / `-b` | `-tf` / `-td` / `-tx` |
 | `-w <pat>` | `--and <pat>` |
 | `-P <cond>` | `--exclude-if <cond>` (delete vendored scanner, `tools/`, `vendor/`). `--exclude-if`, not `--prune-if`: old `-P` hid a matching directory entirely (prune paths became `-E` excludes), and that is `--exclude-if`'s directory behavior; `--prune-if` would keep the pruned directory itself in the output. Conditions rewrite from scanner variables (`$path`, `$name`, `$root`, …) to condexp placeholders (`${}`, `${/}`, relative file tests); the root-relative variables (`$root`, `$rpath`, …) have no condexp equivalent and retire with the scanner. |
@@ -376,7 +376,7 @@ wrapper as a contrib script (`contrib/f` in this repo, or it stays in the `f` re
 or reduce further to an alias / shell-function suggestion in the docs — e.g.
 
 ```sh
-f() { fd -uu -p -i --exclude-matchsets vcs_meta,package,noise "$@"; }
+f() { fd -uu -p -i --exclude-matchsets vcs_meta,package,os_meta "$@"; }
 ```
 
 for users who want the defaults but not `f`'s single-letter grammar. The full wrapper
@@ -491,12 +491,12 @@ while fd stays pure.
   one `st_dev`, so that particular boundary is not detected (verified 2026-07-04;
   real volume boundaries like `/System/Volumes/VM` and external disks are).
 - **`trash` builtin added** (see Built-in sets): home- and vroot-anchored, in
-  its own set rather than `noise`, opt-in for the `f` wrapper.
+  its own set rather than `os_meta`, opt-in for the `f` wrapper.
 
 ## Decision Log (2026-07-05)
 
 - **Selection undo for `-m`/`-M`** — so an alias like
-  `alias f='fd -M vcs_meta,package,noise'` can be partially or fully unwound
+  `alias f='fd -M vcs_meta,package,os_meta'` can be partially or fully unwound
   at the prompt:
   - **Trailing-dash negation**: `f -M package-` removes `package` from the
     selection accumulated so far (left-to-right fold across all occurrences;
@@ -513,10 +513,10 @@ while fd stays pure.
     'pakage'"). Set names declared in KDL must not end with `-` (load-time
     error) so the selection syntax stays unambiguous.
   - **Bare `-` clears**: a lone `-` list item discards the selection
-    accumulated so far (`f -M-` ≙ `--clear-exclude-matchsets`; `f -M-,noise`
-    = "exclude only noise"). clap accepts a lone `-` as an option value even
+    accumulated so far (`f -M-` ≙ `--clear-exclude-matchsets`; `f -M-,os_meta`
+    = "exclude only OS metadata"). clap accepts a lone `-` as an option value even
     space-separated, so `-M -`, `-M-`, and `-M=-` all work; only a
-    dash-leading *list* in space form (`-M -,noise`) doesn't — use the
+    dash-leading *list* in space form (`-M -,os_meta`) doesn't — use the
     attached form. Empty-token spellings (`-M,,foo`) were rejected: an empty
     list item stays a parse error so a stray comma can't silently clear the
     selection.
@@ -541,7 +541,7 @@ while fd stays pure.
    ```kdl
    (local)"metadata" {          // don't expose this set to CLI selection
        use (local)"package"     // don't look past the current unit (file)
-       use "noise"              // full scope resolution (final registry)
+       use "os_meta"            // full scope resolution (final registry)
        dir name literal full { ".venv" }
    }
    ```

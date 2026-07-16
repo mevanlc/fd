@@ -893,7 +893,7 @@ mod tests {
             "build_output",
             "cache",
             "package",
-            "noise",
+            "os_meta",
             "trash",
         ] {
             assert!(registry.sets.contains_key(name), "missing builtin '{name}'");

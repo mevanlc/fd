@@ -294,7 +294,7 @@ also not descended into), or `-m` (`--matchsets`) to show *only* entries matchin
 
 ``` bash
 > fd -H -M vcs_meta …            # search hidden files, but hide .git/.svn/.hg/.bzr metadata
-> fd -M vcs_meta,package,noise … # several sets at once
+> fd -M vcs_meta,package,os_meta … # several sets at once
 > fd -m package …                # show only package/environment directories
 ```
 
@@ -307,7 +307,7 @@ The built-in sets:
 | `build_output` | Rust `target` directories (with a `CACHEDIR.TAG`), Gradle `build` directories |
 | `cache` | `__pycache__`, `.cache` |
 | `package` | `node_modules`, `__pypackages__`, `.venv` |
-| `noise` | `.DS_Store` |
+| `os_meta` | `.DS_Store` |
 | `trash` | OS trash locations: `~/.Trash`, `~/.local/share/Trash`, and `.Trashes`, `.Trash-*`, `$RECYCLE.BIN`, `System Volume Information` at volume roots |
 
 Selections are typically baked into a shell alias, so they can be *edited* by later occurrences
@@ -316,10 +316,10 @@ if it was not selected), and a bare `-` clears the whole selection (long form:
 `--clear-matchsets` / `--clear-exclude-matchsets`):
 
 ``` bash
-> alias f='fd -H -I -i -p -M vcs_meta,package,noise'
+> alias f='fd -H -I -i -p -M vcs_meta,package,os_meta'
 > f -M package- …   # stop excluding package directories
 > f -M- …           # search absolutely everything
-> f -M-,noise …     # exclude only noise, whatever the alias says
+> f -M-,os_meta …   # exclude only OS metadata, whatever the alias says
 ```
 
 See `devdocs/F-AS-ALIAS.md` for more on this "search everything" alias.

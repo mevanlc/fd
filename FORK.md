@@ -11,7 +11,7 @@ A *matchset* is a named collection of match clauses defined in
 filters you can define once, name, layer, and share.
 
 ```sh
-fd -M vcs_meta,noise      # exclude entries matching those sets
+fd -M vcs_meta,os_meta    # exclude entries matching those sets
 fd -m package             # only entries matching the 'package' set
 fd --list-matchsets       # table of available sets: NAME / SOURCE / CLAUSES
 ```
@@ -42,9 +42,9 @@ Built-in sets (embedded in the binary, `src/matchset_builtins.kdl`):
 - `cache` — cache directories (`__pycache__`, `.cache`)
 - `package` — package/dependency directories (`node_modules`,
   `__pypackages__`, `.venv`)
-- `noise` — miscellaneous clutter files (`.DS_Store`)
+- `os_meta` — OS-generated metadata files (`.DS_Store`)
 - `trash` — platform trash locations (macOS, FreeDesktop, Windows); separate
-  from `noise` so trash exclusion stays opt-in
+  from `os_meta` so trash exclusion stays opt-in
 
 Clause grammar: clauses are subject-named nodes (`name`, `path`, `bash`) with
 an optional entry-type constraint as a KDL type annotation — e.g.
@@ -162,6 +162,6 @@ still runs a program named `help`, and `fd help` still searches.
 `contrib/scripts/f` is a bash wrapper providing "search everything" defaults
 with a single-letter option grammar. Its historical feature set is now native
 fd: default exclusions map to the built-in matchsets (`vcs_meta`, `package`,
-`noise`), its predicate flag forwards to `--exclude-if`, and `help` values
+`os_meta`), its predicate flag forwards to `--exclude-if`, and `help` values
 forward to fd's mini-helps. It requires an fd with matchset support and finds
 the binary via `$F_FD_BIN`, `fd`, or `fdfind`.

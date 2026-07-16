@@ -5,7 +5,7 @@
 - Add `--exact` option to match the entire filename exactly (literal, non-substring).
 - Add matchsets: named, reusable groups of match rules, selected with `-m`/`--matchsets`
   (include) or `-M`/`--exclude-matchsets` (exclude and prune). Built-in sets (`vcs_meta`,
-  `build_output`, `cache`, `package`, `noise`, `trash`) can be shadowed by user-defined sets
+  `build_output`, `cache`, `package`, `os_meta`, `trash`) can be shadowed by user-defined sets
   in `~/.config/fd/matchsets.kdl` or in files loaded with `--matchset-file`; inspect with
   `--list-matchsets`, skip the user file with `--no-user-matchsets`. `path` patterns support
   the location variables `$<home>/…` and `$<vroot>/…` to anchor a match to the home

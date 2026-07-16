@@ -255,7 +255,7 @@ _fd() {
         ${${${(f)"$(_call_program list-matchsets $words[1] --list-matchsets 2>/dev/null)"}[2,-1]}%%[[:space:]]*}
       )
       (( ${#matchset_names} )) ||
-        matchset_names=( vcs_meta build_output cache package noise trash )
+        matchset_names=( vcs_meta build_output cache package os_meta trash )
       _describe -t matchsets 'matchset name' matchset_names && ret=0
       ;;
   esac
