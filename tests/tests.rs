@@ -1690,9 +1690,9 @@ fn test_matchsets_list_builtins() {
         "NAME          SOURCE   CLAUSES
         build_output  builtin  2 (d) bash
         cache         builtin  2 (d) name literal full, 1 (d) bash
-        os_meta       builtin  1 (f) name literal full
+        os_meta       builtin  1 (f) name literal full, 1 (d) path literal full
         package       builtin  3 (d) name literal full
-        trash         builtin  2 (d) path literal full, 3 (d) path literal full, 1 (d) path glob full
+        trash         builtin  2 (d) path literal full, 2 (d) path literal full, 1 (d) path glob full
         vcs_meta      builtin  4 (d) name literal full, 1 (f) name literal full",
     );
 }

@@ -737,9 +737,12 @@ fn clause_patterns(node: &KdlNode) -> Result<Vec<String>> {
 
     let mut patterns = Vec::new();
     for child in children.nodes() {
-        if !child.entries().is_empty() || child.children().is_some() || child.ty().is_some() {
-            bail!("patterns must be child nodes with no arguments, annotations, or children");
+        if !child.entries().is_empty() || child.children().is_some() {
+            bail!("patterns must be child nodes with no arguments or children");
         }
+        // Pattern annotations are reserved for cross-cutting tags. Accept
+        // them now, but leave them semantically inert until tag selection is
+        // implemented.
         patterns.push(child.name().value().to_string());
     }
     Ok(patterns)
@@ -926,6 +929,28 @@ mod tests {
         .unwrap();
 
         assert!(registry.sets.contains_key("s"));
+    }
+
+    #[test]
+    fn accepts_ignored_pattern_tag_annotations() {
+        let registry = parse_registry(
+            r#"
+            "s" {
+                (d) name literal full {
+                    (python) "__pycache__"
+                    (generic) ".cache"
+                }
+                (d) bash {
+                    (cachedir_tag) "-f CACHEDIR.TAG"
+                }
+            }
+        "#,
+        )
+        .unwrap();
+
+        let set = &registry.sets["s"];
+        assert_eq!(set.clauses.len(), 3);
+        assert_eq!(set.summary, "2 (d) name literal full, 1 (d) bash");
     }
 
     #[test]

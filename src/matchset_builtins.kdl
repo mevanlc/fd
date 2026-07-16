@@ -9,44 +9,47 @@
 // clause covers git worktrees and submodules, where .git is a pointer file.
 "vcs_meta" {
     (d) name literal full {
-        ".git"
-        ".svn"
-        ".hg"
-        ".bzr"
+        (git) ".git"
+        (subversion) ".svn"
+        (mercurial) ".hg"
+        (bazaar) ".bzr"
     }
     (f) name literal full {
-        ".git"
+        (git) ".git"
     }
 }
 
 "build_output" {
     (d) bash {
-        "${/} == target && -f CACHEDIR.TAG"
-        "${/} == build && [[ -f ../build.gradle.kts || -f ../build.gradle || -f ../gradle.properties ]]"
+        (rust) "${/} == target && -f CACHEDIR.TAG"
+        (gradle) "${/} == build && [[ -f ../gradle.properties || -f ../build.gradle.kts || -f ../build.gradle ]]"
     }
 }
 
 "cache" {
     (d) name literal full {
-        "__pycache__"
-        ".cache"
+        (python) "__pycache__"
+        (generic) ".cache"
     }
     (d) bash {
-        "-f CACHEDIR.TAG"
+        (cachedir_tag) "-f CACHEDIR.TAG"
     }
 }
 
 "package" {
     (d) name literal full {
-        "node_modules"
-        "__pypackages__"
-        ".venv"
+        (node) "node_modules"
+        (python) "__pypackages__"
+        (python) ".venv"
     }
 }
 
 "os_meta" {
     (f) name literal full {
-        ".DS_Store"
+        (macos) ".DS_Store"
+    }
+    (d) path literal full {
+        (windows) "$<vroot>/System Volume Information"
     }
 }
 
@@ -56,15 +59,14 @@
 // *named* .Trashes elsewhere in a tree is not matched.
 "trash" {
     (d) path literal full {
-        "$<home>/.Trash"
-        "$<home>/.local/share/Trash"
+        (macos) "$<home>/.Trash"
+        (freedesktop) "$<home>/.local/share/Trash"
     }
     (d) path literal full {
-        "$<vroot>/.Trashes"
-        "$<vroot>/$RECYCLE.BIN"
-        "$<vroot>/System Volume Information"
+        (macos) "$<vroot>/.Trashes"
+        (windows) "$<vroot>/$RECYCLE.BIN"
     }
     (d) path glob full {
-        "$<vroot>/.Trash-*"
+        (freedesktop) "$<vroot>/.Trash-*"
     }
 }
