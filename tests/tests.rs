@@ -3606,9 +3606,11 @@ fn test_list_details_with_absolute_path() {
 
     let output = te.assert_success_and_get_output(".", &["--list-details", "--absolute-path"]);
     let stdout = String::from_utf8_lossy(&output.stdout);
+    let expected_path = Path::new(&abs_path).join("a.foo");
+    let expected_path = expected_path.to_string_lossy();
 
     assert!(
-        stdout.contains(&format!("{abs_path}/a.foo")),
+        stdout.contains(expected_path.as_ref()),
         "`fd --list-details --absolute-path` did not print absolute paths:\n{stdout}"
     );
     assert!(
