@@ -8,7 +8,7 @@ use nix::unistd::{Gid, Group, Uid, User};
 #[cfg(unix)]
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 #[cfg(windows)]
-use std::os::windows::fs::MetadataExt;
+use winapi_util::{Handle, file};
 
 use lscolors::{Indicator, LsColors, Style};
 
@@ -72,7 +72,7 @@ fn print_entry_list_details<W: Write>(
         .metadata()
         .map(format_permissions)
         .unwrap_or_else(|| "---------".to_string());
-    let links = entry.metadata().map(number_of_links).unwrap_or(0);
+    let links = number_of_links(entry);
     let (owner, group) = entry
         .metadata()
         .map(owner_group)
@@ -180,13 +180,16 @@ fn format_permissions(metadata: &Metadata) -> String {
 }
 
 #[cfg(unix)]
-fn number_of_links(metadata: &Metadata) -> u64 {
-    metadata.nlink()
+fn number_of_links(entry: &DirEntry) -> u64 {
+    entry.metadata().map(MetadataExt::nlink).unwrap_or(0)
 }
 
 #[cfg(windows)]
-fn number_of_links(metadata: &Metadata) -> u64 {
-    metadata.number_of_links()
+fn number_of_links(entry: &DirEntry) -> u64 {
+    Handle::from_path_any(entry.path())
+        .and_then(file::information)
+        .map(|info| info.number_of_links())
+        .unwrap_or(0)
 }
 
 #[cfg(unix)]

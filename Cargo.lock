@@ -340,6 +340,7 @@ dependencies = [
  "tempfile",
  "test-case",
  "tikv-jemallocator",
+ "winapi-util",
 ]
 
 [[package]]
