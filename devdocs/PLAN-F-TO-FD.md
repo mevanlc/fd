@@ -65,8 +65,8 @@ original design punted on: built-ins, extra files, and discoverability.
 ### Target CLI surface
 
 ```text
-Selection (long forms renamed 2026-07-03; shorts unchanged):
-  -m, --matchsets <set[,set...]>          keep only entries matching any named set
+Selection (shorts unchanged):
+  -m, --include-matchsets <set[,set...]>  keep only entries matching any named set
   -M, --exclude-matchsets <set[,set...]>  drop entries matching any named set;
                                           matching directories are pruned
 
@@ -81,15 +81,16 @@ Terminology: `~/.config/fd/*` is the **user configuration space**; the file it h
 for this feature is the **user matchset file**. Docs and flag names say "user", not
 "well-known".
 
-The long forms are plural (`--matchsets`, not `--matchset`) because the value is a
-comma-separated list of set names (and the flags are repeatable) — same convention as
-cargo's `--features`.
+The long forms are plural (`--include-matchsets` and `--exclude-matchsets`) because
+the value is a comma-separated list of set names (and the flags are repeatable) —
+same convention as cargo's `--features`. Naming both sides makes the inclusion versus
+exclusion distinction explicit and separates selection from registry flags such as
+`--matchset-file` and `--list-matchsets`.
 
 The old boolean `--matchsets` toggle ("load and validate the config") is retired —
-`--list-matchsets` covers its only real use — and its name is **reused** as the
-selection flag's long form (previously `--match`). Retire the toggle and rename the
-selection flags in the same commit, so no intermediate state exists where
-`--matchsets` means two different things. All fork-internal; nothing has shipped.
+`--list-matchsets` covers its only real use. The inclusion selection flag that was
+initially `--match` is now `--include-matchsets`; `--matchsets` is not retained as an
+alias. All fork-internal; nothing has shipped.
 
 ### Registry layering
 
@@ -264,7 +265,7 @@ positional args for pattern-kind/mode. An unannotated clause skips the
   to each set for `--list-matchsets`; keep per-name shadowing at insert time. Types
   follow the one-word casing: `CompiledMatchset`, `SelectedMatchsets`, etc. — sweep
   any remaining `MatchSet`-humped identifiers.
-- `src/cli.rs`: rename the selection long forms (`long = "match"` → `"matchsets"`,
+- `src/cli.rs`: rename the selection long forms (`long = "match"` → `"include-matchsets"`,
   `long = "exclude-match"` → `"exclude-matchsets"`); add
   `matchset_files: Vec<PathBuf>` and `list_matchsets: bool`; remove the old
   `--matchsets` bool; rename `no_matchsets` to `no_user_matchsets`.
@@ -415,7 +416,7 @@ while fd stays pure.
   f-style alias / shell-function suggestion (condensed from `devdocs/F-AS-ALIAS.md`).
 - Man page (`doc/fd.1`): new flags and the `help`-value convention.
 - Shell completions: regenerate; consider completing built-in set names for `-m`/`-M`.
-- CHANGELOG: feature entries for matchsets (`-m/--matchsets`,
+- CHANGELOG: feature entries for matchsets (`-m/--include-matchsets`,
   `-M/--exclude-matchsets`, built-ins, `--matchset-file`, `--list-matchsets`,
   `--no-user-matchsets`) and mini-helps. The internal renames need no entries —
   none of the old spellings ever shipped.
@@ -424,15 +425,18 @@ while fd stays pure.
 
 ---
 
-## Decision Log (2026-07-03)
+## Decision Log (2026-07-03, amended 2026-07-21)
 
 - Terminology is **matchsets** — one word in every casing (`Matchset` in CamelCase,
   never `MatchSet`); `~/.config/fd/*` is the **user configuration space**.
-- Selection flags: `-m/--matchsets`, `-M/--exclude-matchsets` (long forms renamed
-  from `--match`/`--exclude-match`; plural because the value is a CSV of set names).
+- Selection flags: `-m/--include-matchsets`, `-M/--exclude-matchsets` (long forms
+  renamed from `--match`/`--exclude-match`; plural because the value is a CSV of set
+  names, and explicit `include` gives the pair conceptual parity).
   Registry layering with name shadowing: as specified above.
 - `--no-matchsets` becomes `--no-user-matchsets`.
-- `--list-matchsets` subsumes `--matchsets`'s validate role; `--matchsets` retired.
+- `--list-matchsets` subsumes the old boolean `--matchsets` validate role; the later
+  inclusion-selection spelling `--matchsets` is also retired in favor of
+  `--include-matchsets`.
 - Built-ins = the `matchsets-sketch.kdl` taxonomy (not the minimal f-exclusions
   pair).
 - `-m help` / `-M help`: **will not implement** — `help` is a plausible set name.
@@ -520,7 +524,7 @@ while fd stays pure.
     attached form. Empty-token spellings (`-M,,foo`) were rejected: an empty
     list item stays a parse error so a stray comma can't silently clear the
     selection.
-  - **`--clear-matchsets` / `--clear-exclude-matchsets`**: hidden
+  - **`--clear-include-matchsets` / `--clear-exclude-matchsets`**: hidden
     `overrides_with` flags (the `--no-hidden` idiom) that discard all earlier
     occurrences of the paired flag; later occurrences start fresh. Named
     `clear-` rather than `no-` because `no-` reads as disabling the feature

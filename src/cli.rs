@@ -404,9 +404,9 @@ pub struct Opts {
     /// Include entries that match any of the named matchsets.
     /// A name with a trailing '-' removes that name from the selection again
     /// (useful for undoing a selection baked into a shell alias); a bare '-'
-    /// (or '--clear-matchsets') discards the whole selection made so far.
+    /// (or '--clear-include-matchsets') discards the whole selection made so far.
     #[arg(
-        long = "matchsets",
+        long = "include-matchsets",
         short = 'm',
         value_name = "set[,set...]",
         value_delimiter = ',',
@@ -414,11 +414,11 @@ pub struct Opts {
         help = "Include entries matching named matchset(s)",
         long_help
     )]
-    pub matchsets: Vec<String>,
+    pub include_matchsets: Vec<String>,
 
-    /// Discards all --matchsets selections made earlier on the command line
-    #[arg(long, overrides_with = "matchsets", hide = true, action = ArgAction::SetTrue)]
-    clear_matchsets: (),
+    /// Discards all --include-matchsets selections made earlier on the command line
+    #[arg(long, overrides_with = "include_matchsets", hide = true, action = ArgAction::SetTrue)]
+    clear_include_matchsets: (),
 
     /// Exclude entries that match any of the named matchsets.
     /// A name with a trailing '-' removes that name from the selection again

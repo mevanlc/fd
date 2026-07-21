@@ -58,7 +58,7 @@ occurrences, so a later value edits the alias's list:
 | exclude *only* OS metadata, whatever the alias says | `-M-,os_meta` (clear, then add) |
 | also exclude another set | `-M trash` |
 
-Long spellings of the clear: `--clear-matchsets` /
+Long spellings of the clear: `--clear-include-matchsets` /
 `--clear-exclude-matchsets`. Misspelled names still fail loudly — every
 mentioned name, even one only removed, must be a known matchset.
 

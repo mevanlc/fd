@@ -20,7 +20,7 @@ Flags:
 
 | Flag | Meaning |
 |---|---|
-| `-m`, `--matchsets <set[,set…]>` | include only entries matching any named set |
+| `-m`, `--include-matchsets <set[,set…]>` | include only entries matching any named set |
 | `-M`, `--exclude-matchsets <set[,set…]>` | exclude entries matching any named set |
 | `--matchset-file <path>` | load additional sets from a KDL file (repeatable) |
 | `--no-user-matchsets` | skip the user matchset file only |

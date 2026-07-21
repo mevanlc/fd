@@ -325,7 +325,7 @@ Examples:
 Exclude directories that (directly) contain the given name.
 This option can be specified multiple times.
 .TP
-.BI "\-m, \-\-matchsets " set[,set...]
+.BI "\-m, \-\-include\-matchsets " set[,set...]
 Only show entries that match at least one of the named matchsets (see the
 .B MATCHSETS
 section).
@@ -349,7 +349,7 @@ f \-M\-              # exclude nothing
 f \-M\-,os_meta      # exclude only OS metadata
 .RE
 .IP
-The hidden flags '\-\-clear\-matchsets' and '\-\-clear\-exclude\-matchsets' are long
+The hidden flags '\-\-clear\-include\-matchsets' and '\-\-clear\-exclude\-matchsets' are long
 spellings of the bare '\-'.
 .TP
 .BI "\-\-matchset\-file " path
@@ -643,7 +643,7 @@ The glob syntax is documented here:
 .SH MATCHSETS
 A matchset is a named, reusable group of filesystem\-entry match rules. fd ships built\-in
 sets and users can define their own; nothing is applied unless selected
-with '\-m/\-\-matchsets' or '\-M/\-\-exclude\-matchsets'.
+with '\-m/\-\-include\-matchsets' or '\-M/\-\-exclude\-matchsets'.
 .P
 The built\-in sets are \fBvcs_meta\fR (.git as a directory or worktree/submodule pointer
 file, .svn, .hg, .bzr), \fBbuild_output\fR (Rust target directories with a CACHEDIR.TAG,

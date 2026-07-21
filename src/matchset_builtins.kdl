@@ -1,6 +1,6 @@
 // Built-in matchsets compiled into fd.
 //
-// Select with -m/--matchsets or -M/--exclude-matchsets; inspect with
+// Select with -m/--include-matchsets or -M/--exclude-matchsets; inspect with
 // --list-matchsets. Sets of the same name in the user matchset file
 // (~/.config/fd/matchsets.kdl) or in --matchset-file files shadow these.
 

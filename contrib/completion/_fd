@@ -121,7 +121,7 @@ _fd() {
 	"--exclude-if=[exclude entries that satisfy the bash conditional expression]:conditional expression"
 
     + matchsets # named matchsets
-    '*'{-m+,--matchsets=}'[include only entries matching the named matchset(s)]:matchset names:->matchsets'
+    '*'{-m+,--include-matchsets=}'[include only entries matching the named matchset(s)]:matchset names:->matchsets'
     '*'{-M+,--exclude-matchsets=}'[exclude entries matching the named matchset(s)]:matchset names:->matchsets'
     '*--matchset-file=[load matchsets from a KDL file]:matchset file:_files'
     '--no-user-matchsets[do not load the user matchset file]'

@@ -35,7 +35,7 @@ The main flags are:
 
 | Flag | Meaning |
 |---|---|
-| `-m, --matchsets <set[,set...]>` | include entries matching any selected set |
+| `-m, --include-matchsets <set[,set...]>` | include entries matching any selected set |
 | `-M, --exclude-matchsets <set[,set...]>` | exclude matching entries and prune matching directories |
 | `--matchset-file <path>` | load another KDL matchset file; repeatable |
 | `--no-user-matchsets` | skip the user matchset file |
@@ -51,7 +51,7 @@ $ fd -M vcs_meta,package -M-,os_meta   # clear it, then select only os_meta
 ```
 
 A trailing `-` removes one name. A bare `-` clears the selection; the long
-forms are `--clear-matchsets` and `--clear-exclude-matchsets`.
+forms are `--clear-include-matchsets` and `--clear-exclude-matchsets`.
 
 Built-in matchsets are embedded in the binary:
 

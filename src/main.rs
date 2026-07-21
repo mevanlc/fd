@@ -333,7 +333,7 @@ fn construct_config(
         .transpose()?;
 
     let selected_matchsets = matchsets::load_selected(
-        &opts.matchsets,
+        &opts.include_matchsets,
         &opts.exclude_matchsets,
         &opts.matchset_files,
         opts.no_user_matchsets,

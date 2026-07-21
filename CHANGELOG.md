@@ -3,7 +3,7 @@
 ## Features
 - Add `--ignore-parent` option to override `--no-ignore-parent`, see #1958 (@tmchow)
 - Add `--exact` option to match the entire filename exactly (literal, non-substring).
-- Add matchsets: named, reusable groups of match rules, selected with `-m`/`--matchsets`
+- Add matchsets: named, reusable groups of match rules, selected with `-m`/`--include-matchsets`
   (include) or `-M`/`--exclude-matchsets` (exclude and prune). Built-in sets (`vcs_meta`,
   `build_output`, `cache`, `package`, `os_meta`, `trash`) can be shadowed by user-defined sets
   in `~/.config/fd/matchsets.kdl` or in files loaded with `--matchset-file`; inspect with
@@ -11,7 +11,7 @@
   the location variables `$<home>/…` and `$<vroot>/…` to anchor a match to the home
   directory or to volume roots.
 - Matchset selections can be edited by later `-m`/`-M` occurrences: a trailing `-` removes a
-  name from the selection, a bare `-` (or `--clear-matchsets`/`--clear-exclude-matchsets`)
+  name from the selection, a bare `-` (or `--clear-include-matchsets`/`--clear-exclude-matchsets`)
   clears it. Useful for undoing a selection baked into a shell alias.
 - Many options with a compact value syntax (`-t`, `-S`, `-R`/`--sort`, `--changed-within`,
   `--changed-before`, `--summarize`, `-x`, `-X`, `--bash`, `--prune-if`, `--exclude-if`)

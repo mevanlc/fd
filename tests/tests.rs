@@ -1367,7 +1367,13 @@ fn test_matchsets_include_entries() {
     .matchsets_file(include_str!("fixtures/matchsets/f-exclusions.kdl"));
 
     te.assert_output(
-        &["--hidden", "--no-ignore", "--matchsets", "metadata", "."],
+        &[
+            "--hidden",
+            "--no-ignore",
+            "--include-matchsets",
+            "metadata",
+            ".",
+        ],
         ".DS_Store
         .venv/
         node_modules/",
@@ -1505,7 +1511,7 @@ fn test_matchsets_clear_flags_reset_earlier_selections() {
             "--no-ignore",
             "-m",
             "os_meta",
-            "--clear-matchsets",
+            "--clear-include-matchsets",
             "package.json",
         ],
         "node_modules/package.json",
@@ -1562,7 +1568,9 @@ fn test_matchsets_retired_flag_names_are_rejected() {
     let te = TestEnv::new(&["node_modules"], &["node_modules/package.json"]);
 
     te.assert_failure(&["--match", "metadata", "."]);
+    te.assert_failure(&["--matchsets", "metadata", "."]);
     te.assert_failure(&["--exclude-match", "metadata", "."]);
+    te.assert_failure(&["--clear-matchsets", "."]);
     te.assert_failure(&["--no-matchsets", "-m", "metadata", "."]);
 }
 
