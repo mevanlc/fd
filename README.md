@@ -166,6 +166,9 @@ alias f='fd -H -I -i -p -M vcs_meta,package,os_meta'
 
 The alias can then be adjusted per invocation with flags such as
 `--no-full-path`, `--no-hidden`, `--ignore`, `-M package-` or `-M-`.
+As a convenience, a separator-free `--exact` pattern always matches against the
+filename, so `f --exact Cargo.toml` does not need an explicit `--no-full-path`.
+An exact pattern containing a path separator retains full-path matching.
 
 Options with compact value grammars accept the literal value `help` for a
 focused syntax reference:

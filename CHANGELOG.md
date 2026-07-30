@@ -3,6 +3,9 @@
 ## Features
 - Add `--ignore-parent` option to override `--no-ignore-parent`, see #1958 (@tmchow)
 - Add `--exact` option to match the entire filename exactly (literal, non-substring).
+  Separator-free exact patterns use filename matching even with `--full-path`, which
+  makes the option convenient in aliases that include `-p`. `--exact` conflicts with
+  `--and`, since two distinct exact literals cannot match the same entry.
 - Add matchsets: named, reusable groups of match rules, selected with `-m`/`--include-matchsets`
   (include) or `-M`/`--exclude-matchsets` (exclude and prune). Built-in sets (`vcs_meta`,
   `build_output`, `cache`, `package`, `os_meta`, `trash`) can be shadowed by user-defined sets

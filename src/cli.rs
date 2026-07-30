@@ -206,12 +206,13 @@ pub struct Opts {
     pub bash: bool,
 
     /// Perform an exact match. This is equivalent to '--fixed-strings' but requires
-    /// the pattern to match the entire filename (or path if '--full-path' is used),
-    /// rather than a substring. Special regex characters in the pattern are treated
-    /// as literal characters.
+    /// the pattern to match the entire filename, rather than a substring. With
+    /// '--full-path', an exact pattern containing a path separator instead matches
+    /// the entire absolute path; a separator-free pattern still matches the filename.
+    /// Special regex characters in the pattern are treated as literal characters.
     #[arg(
         long,
-        conflicts_with_all(["glob", "fixed_strings"]),
+        conflicts_with_all(["glob", "fixed_strings", "exprs"]),
         hide_short_help = true,
         help = "Match the entire filename exactly (literal, non-substring)",
         long_help
@@ -293,7 +294,7 @@ pub struct Opts {
     #[arg(long, overrides_with = "follow", hide = true, action = ArgAction::SetTrue)]
     no_follow: (),
 
-    /// By default, the search pattern is only matched against the filename (or directory name). Using this flag, the pattern is matched against the full (absolute) path. The flag can be overridden with --no-full-path. Example:
+    /// By default, the search pattern is only matched against the filename (or directory name). Using this flag, the pattern is matched against the full (absolute) path. A separator-free '--exact' pattern still matches only the filename. The flag can be overridden with --no-full-path. Example:
     ///   fd --glob -p '**/.git/config'
     #[arg(
         long,
@@ -864,6 +865,10 @@ pub struct Opts {
 }
 
 impl Opts {
+    pub fn uses_full_path_matching(&self) -> bool {
+        self.full_path && (!self.exact || self.pattern.chars().any(std::path::is_separator))
+    }
+
     pub fn search_paths(&self) -> anyhow::Result<Vec<PathBuf>> {
         // would it make sense to concatenate these?
         let paths = if !self.path.is_empty() {

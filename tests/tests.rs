@@ -3060,6 +3060,27 @@ fn test_exact_literal_nonsubstring() {
         &["--exact", "--case-sensitive", "Download (1).tar.gz"],
         "test2/Download (1).tar.gz",
     );
+
+    // A separator-free exact pattern matches the filename even when --full-path
+    // was supplied earlier, as it commonly is by a shell alias.
+    te.assert_output(&["-p", "-td", "--exact", "test1"], "test1/");
+
+    // Exact absolute paths retain full-path matching.
+    let test1_path = fs::canonicalize(te.test_root()).unwrap().join("test1");
+    te.assert_output(
+        &["-p", "-td", "--exact", test1_path.to_str().unwrap()],
+        "test1/",
+    );
+}
+
+#[test]
+fn test_exact_conflicts_with_and() {
+    let te = TestEnv::new(DEFAULT_DIRS, DEFAULT_FILES);
+
+    te.assert_failure_with_error(
+        &["--exact", "a.foo", "--and", "a.foo"],
+        "error: the argument '--exact' cannot be used with '--and <pattern>'",
+    );
 }
 
 /// Filenames with invalid UTF-8 sequences

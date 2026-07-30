@@ -228,7 +228,7 @@ fn set_working_dir(opts: &Opts) -> Result<()> {
 ///
 /// See https://github.com/sharkdp/fd/issues/1873.
 fn ensure_search_pattern_is_not_a_path(opts: &Opts) -> Result<()> {
-    if opts.full_path {
+    if opts.uses_full_path_matching() {
         return Ok(());
     }
 
@@ -384,7 +384,7 @@ fn construct_config(
     let has_command = command.is_some() || opts.list_details;
     let sort = opts.sort.as_ref().map(|expr| expr.0.clone());
 
-    let full_path_base = if opts.full_path {
+    let full_path_base = if opts.uses_full_path_matching() {
         Some(env::current_dir().context(
             "Could not determine current directory. \
              This is required for --full-path.",

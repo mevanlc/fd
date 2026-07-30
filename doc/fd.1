@@ -124,9 +124,10 @@ or '\-\-exact'.
 .TP
 .B \-\-exact
 Perform an exact match. This is equivalent to '\-\-fixed\-strings' but requires the pattern to
-match the entire filename (or the full path if '\-\-full\-path' is used), rather than a substring.
-Special regex characters in the pattern are treated as literal characters.
-Cannot be used together with '\-\-glob' or '\-\-fixed\-strings'.
+match the entire filename, rather than a substring. With '\-\-full\-path', an exact pattern
+containing a path separator instead matches the entire absolute path; a separator\-free pattern
+still matches the filename. Special regex characters in the pattern are treated as literal
+characters. Cannot be used together with '\-\-glob', '\-\-fixed\-strings', or '\-\-and'.
 .TP
 .B \-\-bash
 Treat the search pattern as a bash conditional expression. Expressions can use the fd placeholder
@@ -184,7 +185,8 @@ also traversed. The flag can be overridden with '--no-follow'.
 By default, the search pattern is only matched against the filename (or directory name). Using
 this flag, the
 .I pattern
-is matched against the full path. The flag can be overridden with '--no-full-path'.
+is matched against the full path. A separator\-free '\-\-exact' pattern still matches only the
+filename. The flag can be overridden with '--no-full-path'.
 .TP
 .B \-0, \-\-print0
 Separate search results by the null character (instead of newlines). Useful for piping results to
