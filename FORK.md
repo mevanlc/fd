@@ -132,6 +132,23 @@ fd --summarize fext
 fd -tf --summarize fext:@d-i-s
 ```
 
+## `{#}` — job numbers for `-X/--exec-batch`
+
+`-X` spawns one process per batch of results. `{#}` expands to that process's
+job number, counting from 1:
+
+```sh
+fd -e rs --batch-size 100 -X sh -c 'check "$@" > report{#}.txt' --
+```
+
+`{#}` only varies once the results are split into batches, by `--batch-size` or
+by the OS command line length limit. Numbers are unique across every process one
+run spawns, so repeated `-X` options never collide.
+
+Unlike the path placeholders, `{#}` may appear in any number of arguments and
+does not count as the batch's path placeholder, so `-X echo {#}` still gets the
+implicit `{}` appended. `-x/--exec` and `--format` reject it.
+
 ## `--list-details` is fully internal
 
 Upstream shells out to `ls`/`gls` for `--list-details`. This fork always uses

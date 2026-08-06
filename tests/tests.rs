@@ -2897,6 +2897,94 @@ fn test_exec_batch_with_limit() {
     );
 }
 
+#[test]
+fn test_exec_batch_job_number() {
+    // TODO Test for windows
+    if cfg!(windows) {
+        return;
+    }
+
+    let te = TestEnv::new(DEFAULT_DIRS, DEFAULT_FILES);
+
+    // Six matches, batched two at a time, so three processes are spawned.
+    let output = te.assert_success_and_get_output(
+        ".",
+        &[
+            "foo",
+            "--batch-size=2",
+            "--exec-batch",
+            "echo",
+            "job{#}",
+            "{/}",
+        ],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    let mut jobs: Vec<_> = stdout
+        .lines()
+        .map(|line| line.split_whitespace().next().unwrap())
+        .collect();
+    jobs.sort_unstable();
+    assert_eq!(&jobs, &["job1", "job2", "job3"]);
+
+    // A single batch is job 1, and the job number alone does not suppress the implicit "{}".
+    let output =
+        te.assert_success_and_get_output(".", &["a.foo", "--exec-batch", "echo", "job{#}"]);
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "job1 ./a.foo"
+    );
+
+    // Job numbers stay unique when several commands are given.
+    let output = te.assert_success_and_get_output(
+        ".",
+        &[
+            "a.foo",
+            "--exec-batch",
+            "echo",
+            "first{#}",
+            ";",
+            "--exec-batch",
+            "echo",
+            "second{#}",
+        ],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let jobs: Vec<_> = stdout
+        .lines()
+        .map(|line| line.split_whitespace().next().unwrap())
+        .collect();
+    assert_eq!(&jobs, &["first1", "second2"]);
+
+    // '{{#}}' is an escape for the literal text, not a job number.
+    let output =
+        te.assert_success_and_get_output(".", &["a.foo", "--exec-batch", "echo", "{{#}}", "{/}"]);
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "{#} a.foo");
+}
+
+#[test]
+fn test_exec_job_number_rejected_outside_batch() {
+    te_error_for_job_number(&["foo", "--exec", "echo", "{#}"]);
+    te_error_for_job_number(&["foo", "--exec", "echo", "job{#}:", "{}"]);
+}
+
+fn te_error_for_job_number(args: &[&str]) {
+    let te = TestEnv::new(DEFAULT_DIRS, DEFAULT_FILES);
+    te.assert_failure_with_error(
+        args,
+        "error: The '{#}' placeholder is only supported for --exec-batch",
+    );
+}
+
+#[test]
+fn test_format_job_number_rejected() {
+    let te = TestEnv::new(DEFAULT_DIRS, DEFAULT_FILES);
+    te.assert_failure_with_error(
+        &["foo", "--format", "{#} {}"],
+        "[fd error]: The '{#}' placeholder is only supported for --exec-batch",
+    );
+}
+
 /// Shell script execution (--exec) with a custom --path-separator
 #[test]
 fn test_exec_with_separator() {

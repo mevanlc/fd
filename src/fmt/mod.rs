@@ -21,7 +21,21 @@ pub enum Token {
     Parent,
     NoExt,
     BasenameNoExt,
+    JobNumber,
     Text(String),
+}
+
+/// The textual form of [`Token::JobNumber`].
+const JOB_NUMBER: &str = "{#}";
+
+impl Token {
+    /// Does this token expand to a part of the search result's path?
+    ///
+    /// [`Token::JobNumber`] does not: it is bound to the process a command template is
+    /// expanded for, not to the entry being processed.
+    fn expands_path(&self) -> bool {
+        !matches!(self, Token::JobNumber | Token::Text(_))
+    }
 }
 
 impl Display for Token {
@@ -32,6 +46,7 @@ impl Display for Token {
             Token::Parent => f.write_str("{//}")?,
             Token::NoExt => f.write_str("{.}")?,
             Token::BasenameNoExt => f.write_str("{/.}")?,
+            Token::JobNumber => f.write_str(JOB_NUMBER)?,
             Token::Text(ref string) => f.write_str(string)?,
         }
         Ok(())
@@ -51,8 +66,40 @@ pub enum FormatTemplate {
 static PLACEHOLDERS: OnceLock<AhoCorasick> = OnceLock::new();
 
 impl FormatTemplate {
-    pub fn has_tokens(&self) -> bool {
-        matches!(self, FormatTemplate::Tokens(_))
+    fn tokens(&self) -> &[Token] {
+        match self {
+            FormatTemplate::Tokens(tokens) => tokens,
+            FormatTemplate::Text(_) => &[],
+        }
+    }
+
+    /// Does this template contain a placeholder that expands to the search result's path?
+    pub fn has_path_tokens(&self) -> bool {
+        self.tokens().iter().any(Token::expands_path)
+    }
+
+    /// Does this template contain the job-number placeholder?
+    pub fn has_job_number(&self) -> bool {
+        self.tokens().iter().any(|t| matches!(t, Token::JobNumber))
+    }
+
+    /// Bind every job-number placeholder in this template to `job`.
+    ///
+    /// The result only depends on the search result's path, so it can be reused for every
+    /// entry handled by the same process.
+    pub fn with_job_number(&self, job: usize) -> Self {
+        match self {
+            FormatTemplate::Text(_) => self.clone(),
+            FormatTemplate::Tokens(tokens) => FormatTemplate::Tokens(
+                tokens
+                    .iter()
+                    .map(|token| match token {
+                        Token::JobNumber => Token::Text(job.to_string()),
+                        token => token.clone(),
+                    })
+                    .collect(),
+            ),
+        }
     }
 
     pub fn parse(fmt: &str) -> Self {
@@ -62,7 +109,7 @@ impl FormatTemplate {
         let mut remaining = fmt;
         let mut buf = String::new();
         let placeholders = PLACEHOLDERS.get_or_init(|| {
-            AhoCorasick::new(["{{", "}}", "{}", "{/}", "{//}", "{.}", "{/.}"]).unwrap()
+            AhoCorasick::new(["{{", "}}", "{}", "{/}", "{//}", "{.}", "{/.}", JOB_NUMBER]).unwrap()
         });
         while let Some(m) = placeholders.find(remaining) {
             match m.pattern().as_u32() {
@@ -131,6 +178,10 @@ impl FormatTemplate {
                         Placeholder => {
                             s.push(Self::replace_separator(path.as_ref(), path_separator))
                         }
+                        // Job numbers are bound by `with_job_number()` before a template is
+                        // expanded, and are rejected outside of `--exec-batch`. An unbound one
+                        // has no value to substitute, so echo the placeholder back verbatim.
+                        JobNumber => s.push(JOB_NUMBER),
                         Text(string) => s.push(string),
                     }
                 }
@@ -206,6 +257,7 @@ fn token_from_pattern_id(id: u32) -> Token {
         4 => Parent,
         5 => NoExt,
         6 => BasenameNoExt,
+        7 => JobNumber,
         _ => unreachable!(),
     }
 }
@@ -277,5 +329,51 @@ mod fmt_tests {
             noExt=a/folder/file \
             basenameNoExt=file }"
         );
+    }
+
+    #[test]
+    fn parse_job_number() {
+        use Token::*;
+
+        let templ = FormatTemplate::parse("out{#}.log");
+        assert_eq!(
+            templ,
+            FormatTemplate::Tokens(vec![Text("out".into()), JobNumber, Text(".log".into()),])
+        );
+        assert!(templ.has_job_number());
+        assert!(!templ.has_path_tokens());
+
+        // The job number is not a path placeholder, but it can share an argument with one.
+        let templ = FormatTemplate::parse("{/}.{#}");
+        assert!(templ.has_job_number());
+        assert!(templ.has_path_tokens());
+    }
+
+    #[test]
+    fn parse_escaped_job_number() {
+        let templ = FormatTemplate::parse("{{#}}");
+        assert_eq!(templ, FormatTemplate::Text("{#}".into()));
+        assert!(!templ.has_job_number());
+    }
+
+    #[test]
+    fn generate_job_number() {
+        let templ = FormatTemplate::parse("{/.}-{#}.log");
+        let path = PathBuf::from("dir/file.txt");
+
+        assert_eq!(
+            templ.with_job_number(7).generate(&path, None),
+            OsString::from("file-7.log")
+        );
+        // Binding a job number leaves the path placeholders alone, so the same bound template
+        // can be reused for every entry of a batch.
+        assert_eq!(
+            templ
+                .with_job_number(7)
+                .generate(PathBuf::from("other.txt"), None),
+            OsString::from("other-7.log")
+        );
+        // An unbound job number expands to the placeholder itself.
+        assert_eq!(templ.generate(&path, None), OsString::from("file-{#}.log"));
     }
 }

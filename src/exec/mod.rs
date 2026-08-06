@@ -60,7 +60,7 @@ impl CommandSet {
                 .into_iter()
                 .map(|args| {
                     let cmd = CommandTemplate::new(args, ExecutionMode::Batch)?;
-                    if cmd.number_of_tokens() > 1 {
+                    if cmd.number_of_path_args() > 1 {
                         bail!("Only one placeholder allowed for batch commands");
                     }
                     Ok(cmd)
@@ -91,24 +91,25 @@ impl CommandSet {
     where
         I: Iterator<Item = PathBuf>,
     {
+        let mut jobs = JobCounter::default();
         let builders: io::Result<Vec<_>> = self
             .commands
             .iter()
-            .map(|c| CommandBuilder::new(c, limit))
+            .map(|c| CommandBuilder::new(c, limit, &mut jobs))
             .collect();
 
         match builders {
             Ok(mut builders) => {
                 for path in paths {
                     for builder in &mut builders {
-                        if let Err(e) = builder.push(&path, path_separator) {
+                        if let Err(e) = builder.push(&path, path_separator, &mut jobs) {
                             return handle_cmd_error(Some(&builder.cmd), e);
                         }
                     }
                 }
 
                 for builder in &mut builders {
-                    if let Err(e) = builder.finish() {
+                    if let Err(e) = builder.finish(&mut jobs) {
                         return handle_cmd_error(Some(&builder.cmd), e);
                     }
                 }
@@ -120,40 +121,47 @@ impl CommandSet {
     }
 }
 
+/// Hands out the numbers substituted for the `{#}` placeholder.
+///
+/// A number is reserved for every process a `--exec-batch` run is about to build, so it is
+/// unique across all of that run's processes — including those of separate `-X` templates.
+#[derive(Debug, Default)]
+struct JobCounter(usize);
+
+impl JobCounter {
+    fn next_job(&mut self) -> usize {
+        self.0 += 1;
+        self.0
+    }
+}
+
+/// A batch command's arguments, split around the path placeholder and bound to one job.
+#[derive(Debug)]
+struct JobArgs {
+    pre: Vec<OsString>,
+    path: FormatTemplate,
+    post: Vec<OsString>,
+}
+
 /// Represents a multi-exec command as it is built.
 #[derive(Debug)]
-struct CommandBuilder {
-    pre_args: Vec<OsString>,
-    path_arg: FormatTemplate,
-    post_args: Vec<OsString>,
+struct CommandBuilder<'a> {
+    template: &'a CommandTemplate,
+    args: JobArgs,
     cmd: Command,
     count: usize,
     limit: usize,
     exit_code: ExitCode,
 }
 
-impl CommandBuilder {
-    fn new(template: &CommandTemplate, limit: usize) -> io::Result<Self> {
-        let mut pre_args = vec![];
-        let mut path_arg = None;
-        let mut post_args = vec![];
-
-        for arg in &template.args {
-            if arg.has_tokens() {
-                path_arg = Some(arg.clone());
-            } else if path_arg.is_none() {
-                pre_args.push(arg.generate("", None));
-            } else {
-                post_args.push(arg.generate("", None));
-            }
-        }
-
-        let cmd = Self::new_command(&pre_args)?;
+impl<'a> CommandBuilder<'a> {
+    fn new(template: &'a CommandTemplate, limit: usize, jobs: &mut JobCounter) -> io::Result<Self> {
+        let args = template.split_for_job(jobs.next_job());
+        let cmd = Self::new_command(&args.pre)?;
 
         Ok(Self {
-            pre_args,
-            path_arg: path_arg.unwrap(),
-            post_args,
+            template,
+            args,
             cmd,
             count: 0,
             limit,
@@ -170,17 +178,22 @@ impl CommandBuilder {
         Ok(cmd)
     }
 
-    fn push(&mut self, path: &Path, separator: Option<&str>) -> io::Result<()> {
+    fn push(
+        &mut self,
+        path: &Path,
+        separator: Option<&str>,
+        jobs: &mut JobCounter,
+    ) -> io::Result<()> {
         if self.limit > 0 && self.count >= self.limit {
-            self.finish()?;
+            self.finish(jobs)?;
         }
 
-        let arg = self.path_arg.generate(path, separator);
+        let arg = self.args.path.generate(path, separator);
         if !self
             .cmd
-            .args_would_fit(iter::once(&arg).chain(&self.post_args))
+            .args_would_fit(iter::once(&arg).chain(&self.args.post))
         {
-            self.finish()?;
+            self.finish(jobs)?;
         }
 
         self.cmd.try_arg(arg)?;
@@ -188,14 +201,15 @@ impl CommandBuilder {
         Ok(())
     }
 
-    fn finish(&mut self) -> io::Result<()> {
+    fn finish(&mut self, jobs: &mut JobCounter) -> io::Result<()> {
         if self.count > 0 {
-            self.cmd.try_args(&self.post_args)?;
+            self.cmd.try_args(&self.args.post)?;
             if !self.cmd.status()?.success() {
                 self.exit_code = ExitCode::GeneralError;
             }
 
-            self.cmd = Self::new_command(&self.pre_args)?;
+            self.args = self.template.split_for_job(jobs.next_job());
+            self.cmd = Self::new_command(&self.args.pre)?;
             self.count = 0;
         }
 
@@ -229,7 +243,11 @@ impl CommandTemplate {
             let arg = arg.as_ref();
 
             let tmpl = FormatTemplate::parse(arg);
-            has_placeholder |= tmpl.has_tokens();
+            // A job number is only meaningful when several results share one process.
+            if mode == ExecutionMode::OneByOne && tmpl.has_job_number() {
+                bail!("The '{{#}}' placeholder is only supported for --exec-batch");
+            }
+            has_placeholder |= tmpl.has_path_tokens();
             args.push(tmpl);
         }
 
@@ -243,7 +261,7 @@ impl CommandTemplate {
         }
 
         // A placeholder as the executable is meaningful for `--exec` but never for `--exec-batch`.
-        if mode == ExecutionMode::Batch && args[0].has_tokens() {
+        if mode == ExecutionMode::Batch && args[0].has_path_tokens() {
             bail!("First argument of --exec-batch must be a fixed executable, not a placeholder");
         }
 
@@ -255,8 +273,37 @@ impl CommandTemplate {
         Ok(CommandTemplate { args })
     }
 
-    fn number_of_tokens(&self) -> usize {
-        self.args.iter().filter(|arg| arg.has_tokens()).count()
+    fn number_of_path_args(&self) -> usize {
+        self.args.iter().filter(|arg| arg.has_path_tokens()).count()
+    }
+
+    /// Splits the arguments around the one holding the path placeholder, binding every
+    /// job-number placeholder to `job`.
+    ///
+    /// The surrounding arguments no longer depend on the search result, so they are expanded
+    /// right away; only the path argument is re-expanded for each entry in the batch.
+    fn split_for_job(&self, job: usize) -> JobArgs {
+        let mut pre = Vec::new();
+        let mut path = None;
+        let mut post = Vec::new();
+
+        for arg in &self.args {
+            let arg = arg.with_job_number(job);
+            if arg.has_path_tokens() {
+                path = Some(arg);
+            } else if path.is_none() {
+                pre.push(arg.generate("", None));
+            } else {
+                post.push(arg.generate("", None));
+            }
+        }
+
+        JobArgs {
+            pre,
+            // `new()` appends an implicit placeholder when the template has none.
+            path: path.expect("a batch template always holds a path placeholder"),
+            post,
+        }
     }
 
     /// Generates and executes a command.
@@ -433,6 +480,49 @@ mod tests {
     #[test]
     fn command_set_no_args() {
         assert!(CommandSet::new(vec![vec!["echo"], vec![]]).is_err());
+    }
+
+    #[test]
+    fn tokens_job_number_batch_only() {
+        assert!(CommandSet::new_batch(vec![vec!["echo", "{#}", "{}"]]).is_ok());
+        // A job number is not a path placeholder, so the implicit "{}" is still appended...
+        let template = CommandTemplate::new(vec!["echo", "{#}"], ExecutionMode::Batch).unwrap();
+        assert_eq!(generate_str(&template, "foo"), vec!["echo", "{#}", "foo"]);
+        // ...and it does not count towards the batch mode's single-placeholder limit.
+        assert_eq!(template.number_of_path_args(), 1);
+
+        assert!(CommandSet::new(vec![vec!["echo", "{#}"]]).is_err());
+        assert!(CommandSet::new(vec![vec!["echo", "job{#}:", "{}"]]).is_err());
+        // Escaped braces are literal text, not a job number.
+        assert!(CommandSet::new(vec![vec!["echo", "{{#}}"]]).is_ok());
+    }
+
+    #[test]
+    fn split_for_job_binds_job_number() {
+        let template = CommandTemplate::new(
+            vec!["cmd{#}", "-o", "out{#}", "{/}", "end{#}"],
+            ExecutionMode::Batch,
+        )
+        .unwrap();
+
+        let args = template.split_for_job(3);
+        assert_eq!(args.pre, ["cmd3", "-o", "out3"]);
+        assert_eq!(args.post, ["end3"]);
+        assert_eq!(args.path.generate("dir/file.txt", None), "file.txt");
+
+        // Every job re-binds the surrounding arguments.
+        let args = template.split_for_job(4);
+        assert_eq!(args.pre, ["cmd4", "-o", "out4"]);
+        assert_eq!(args.post, ["end4"]);
+    }
+
+    #[test]
+    fn job_counter_starts_at_one() {
+        let mut jobs = JobCounter::default();
+        assert_eq!(
+            [jobs.next_job(), jobs.next_job(), jobs.next_job()],
+            [1, 2, 3]
+        );
     }
 
     #[test]

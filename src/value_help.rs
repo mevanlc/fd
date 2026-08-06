@@ -72,16 +72,22 @@ Placeholders:
   {}    path                {/}   basename
   {//}  parent directory    {.}   path without extension
   {/.}  basename without extension
+  {#}   job number of the spawned process, 1-based (-X only)
   {{    literal '{'         }}    literal '}'
 
-If no placeholder is present, {} is appended implicitly.
+If no path placeholder is present, {} is appended implicitly.
 All following arguments belong to the command; terminate the command
 with ';' if more fd arguments follow.
+
+-X spawns one process per batch, so {#} only varies when the results are
+split up by --batch-size or by the command line length limit. Numbers are
+unique across every process one fd run spawns.
 
 Examples:
   fd -e zip -x unzip
   fd -e jpg -x convert {} {.}.png
   fd -e rs -X wc -l
+  fd -e rs --batch-size 100 -X sh -c 'check \"$@\" > report{#}.txt' --
 
 To run a program actually named 'help', use a path: -x ./help
 ";

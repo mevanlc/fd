@@ -151,6 +151,26 @@ including dotfiles and `s` for ascending count. Prefix a letter with `-` to
 disable it or `@` to use the platform default. Dotfiles and ascending counts
 are enabled by default; case folding defaults on for macOS and Windows.
 
+### job numbers for `-X`
+
+`-X/--exec-batch` runs one process per batch of results. The `{#}` placeholder
+expands to that process's job number, counting from 1, which gives each batch a
+name of its own:
+
+```console
+$ fd -e rs --batch-size 100 -X sh -c 'check "$@" > report{#}.txt' --
+```
+
+A single `-X` usually runs one process, so `{#}` only varies once the results
+are split into batches — by `--batch-size` or by the command line length limit
+the operating system imposes. Numbers are unique across every process one `fd`
+run spawns, so repeated `-X` options never write to the same `report1.txt`.
+
+Unlike the path placeholders, `{#}` may appear in any number of arguments, and
+it does not count as the batch's path placeholder: `-X echo {#}` still gets the
+implicit `{}` appended. `-x` and `--format` reject it, since neither has batches
+to number.
+
 ### output and alias conveniences
 
 `-l/--list-details` is implemented entirely inside fd instead of invoking

@@ -467,7 +467,17 @@ fn construct_config(
         format: opts
             .format
             .as_deref()
-            .map(crate::fmt::FormatTemplate::parse),
+            .map(crate::fmt::FormatTemplate::parse)
+            .map(|format| {
+                if format.has_job_number() {
+                    Err(anyhow!(
+                        "The '{{#}}' placeholder is only supported for --exec-batch"
+                    ))
+                } else {
+                    Ok(format)
+                }
+            })
+            .transpose()?,
         summarize: opts.summarize.take(),
         command: command.map(Arc::new),
         batch_size: opts.batch_size,

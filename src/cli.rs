@@ -1126,11 +1126,21 @@ impl clap::Args for Exec {
                        '{{':   literal '{' (for escaping)\n  \
                        '}}':   literal '}' (for escaping)\n\n\
                      If no placeholder is present, an implicit \"{}\" at the end is assumed.\n\n\
+                     Additionally, '{#}' is substituted with the job number of the process the \
+                     command is run in: 1 for the first process, 2 for the second, and so on. \
+                     A single -X normally runs one process, so '{#}' only varies once the results \
+                     are split into several batches, either by --batch-size or by the operating \
+                     system's limit on the command line length. Numbers are unique across every \
+                     process a single fd run spawns, so repeated -X options never share one. \
+                     Unlike the placeholders above, '{#}' may appear in any number of arguments, \
+                     and it does not count as the batch's path placeholder.\n\n\
                      Examples:\n\n  \
                        - Find all test_*.py files and open them in your favorite editor:\n\n      \
                            fd -g 'test_*.py' -X vim\n\n  \
                        - Find all *.rs files and count the lines with \"wc -l ...\":\n\n      \
-                           fd -e rs -X wc -l\
+                           fd -e rs -X wc -l\n\n  \
+                       - Check 100 files per process, writing each process's report to its own file:\n\n      \
+                           fd -e rs --batch-size 100 -X sh -c 'check \"$@\" > report{#}.txt' --\
                      "
                 ),
         )
