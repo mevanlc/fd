@@ -12,6 +12,7 @@ mod fmt;
 mod hyperlink;
 mod matchsets;
 mod output;
+mod pattern;
 mod regex_helper;
 mod sanitize;
 mod summarize;
@@ -27,7 +28,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use clap::{CommandFactory, Parser};
 use globset::GlobBuilder;
 use lscolors::LsColors;
-use regex::bytes::{Regex, RegexBuilder, RegexSetBuilder};
+use regex::bytes::RegexSetBuilder;
 
 use crate::cli::{ColorWhen, HyperlinkWhen, Opts};
 use crate::config::Config;
@@ -37,6 +38,7 @@ use crate::filetypes::FileTypes;
 #[cfg(unix)]
 use crate::filter::OwnerFilter;
 use crate::filter::TimeFilter;
+use crate::pattern::Pattern;
 use crate::regex_helper::{pattern_has_uppercase_char, pattern_matches_strings_with_leading_dot};
 
 // We use jemalloc for performance reasons, see https://github.com/sharkdp/fd/pull/481
@@ -160,16 +162,16 @@ fn run() -> Result<ExitCode> {
         ensure_use_hidden_option_for_leading_dot_pattern(&config, &pattern_regexps)?;
     }
 
-    let regexps = if config.uses_bash_patterns() {
+    let patterns = if config.uses_bash_patterns() {
         Vec::new()
     } else {
         pattern_regexps
-            .into_iter()
-            .map(|pat| build_regex(pat, &config))
-            .collect::<Result<Vec<Regex>>>()?
+            .iter()
+            .map(|pat| Pattern::build(pat, config.case_sensitive, config.pcre2))
+            .collect::<Result<Vec<Pattern>>>()?
     };
 
-    walk::scan(&search_paths, regexps, config)
+    walk::scan(&search_paths, patterns, config)
 }
 
 #[cfg(feature = "completions")]
@@ -395,6 +397,7 @@ fn construct_config(
 
     Ok(Config {
         case_sensitive,
+        pcre2: opts.pcre2,
         full_path_base,
         ignore_hidden: !(opts.hidden || opts.rg_alias_ignore()),
         read_fdignore: !(opts.no_ignore || opts.rg_alias_ignore()),
@@ -543,20 +546,4 @@ fn ensure_use_hidden_option_for_leading_dot_pattern(
     } else {
         Ok(())
     }
-}
-
-fn build_regex(pattern_regex: String, config: &Config) -> Result<regex::bytes::Regex> {
-    RegexBuilder::new(&pattern_regex)
-        .case_insensitive(!config.case_sensitive)
-        .dot_matches_new_line(true)
-        .build()
-        .map_err(|e| {
-            anyhow!(
-                "{}\n\nNote: You can search for literal substrings with '--fixed-strings' \
-                 or literal strings with '--exact' options (instead of a regular expression). \
-                 Alternatively, you can \
-                 also use the '--glob' option to match on a glob pattern.",
-                e
-            )
-        })
 }

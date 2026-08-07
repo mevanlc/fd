@@ -10,6 +10,7 @@ This fork regularly merges upstream `master` and adds a few larger features:
 
 - named, reusable matchsets for inclusion and exclusion filtering;
 - native evaluation of bash conditional expressions while searching;
+- an opt-in PCRE2 regex engine with look-around and backreferences;
 - multi-key sorting by file metadata;
 - aggregate file-extension summaries; and
 - an internal long-listing implementation that composes with the other output
@@ -111,6 +112,29 @@ $ fd --exclude-if '-x ${} && ${/} != *.sh'
 
 Common simple expressions are compiled into native matchers instead of being
 interpreted separately for every entry.
+
+### pcre2
+
+fd's default regex engine has no look-around and no backreferences. `-P`/`--pcre2`
+switches to PCRE2, which supports both:
+
+```console
+$ fd -P '(?<!test_)main\.rs$'
+$ fd -P '(\w+)_\1'
+```
+
+PCRE2 is used in byte mode, so `.` matches a single byte rather than a whole
+codepoint, and `\w`, `\d` and `\s` are ASCII-only. The default engine is
+Unicode-aware, so patterns relying on Unicode character classes behave
+differently under `-P`. It cannot be combined with `--glob`, `--fixed-strings`,
+`--exact` or `--bash`, all of which bypass the regex engine.
+
+Because PCRE2 is a C library, it is behind a non-default cargo feature — builds
+without it reject `-P` rather than ignoring it:
+
+```console
+$ cargo build --release --features pcre2
+```
 
 ### metadata sorting
 

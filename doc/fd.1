@@ -117,6 +117,14 @@ If combined with the '\-\-full-path' option, '**' can be used to match multiple 
 .B \-\-regex
 Perform a regular-expression based search (default). This can be used to override --glob.
 .TP
+.B \-P, \-\-pcre2
+Use the PCRE2 regular expression engine instead of fd's default engine. PCRE2 supports
+look\-around (e.g. '(?<!foo)bar') and backreferences (e.g. '(\\w+)_\\1'), neither of which the
+default engine can express. Note that PCRE2 matches raw bytes: '.' matches a single byte, and the
+'\\w', '\\d' and '\\s' classes are ASCII\-only, whereas the default engine is Unicode\-aware.
+Requires an fd built with the 'pcre2' feature. Cannot be used together with '\-\-glob',
+'\-\-fixed\-strings', '\-\-exact', or '\-\-bash'.
+.TP
 .B \-F, \-\-fixed\-strings
 Treat the pattern as a literal string instead of a regular expression. Note that this also
 performs substring comparison. If you want to match on an exact filename, consider using '\-\-glob'
@@ -653,6 +661,15 @@ due to OS restrictions on the maximum length of command lines.
 The regular expression syntax used by fd is documented here:
 
     https://docs.rs/regex/1.0.0/regex/#syntax
+
+That engine has no look\-around and no backreferences. Passing '\-P/\-\-pcre2' selects PCRE2
+instead, which supports both; its syntax is documented here:
+
+    https://www.pcre.org/current/doc/html/pcre2pattern.html
+
+PCRE2 is used in byte mode, so '.' matches a single byte rather than a whole codepoint, and the
+'\\w', '\\d' and '\\s' classes match ASCII only. The default engine is Unicode\-aware, so patterns
+that rely on Unicode character classes behave differently under '\-\-pcre2'.
 
 The glob syntax is documented here:
 

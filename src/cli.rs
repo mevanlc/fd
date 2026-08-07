@@ -178,6 +178,27 @@ pub struct Opts {
     )]
     pub regex: bool,
 
+    /// Use the PCRE2 regular expression engine instead of fd's default engine.
+    ///
+    /// PCRE2 supports look-around (e.g. '(?<!foo)bar') and backreferences (e.g.
+    /// '(\w+)_\1'), neither of which fd's default engine can express.
+    ///
+    /// Note that PCRE2 matches raw bytes: '.' matches a single byte, and the
+    /// '\w', '\d' and '\s' classes are ASCII-only. fd's default engine is
+    /// Unicode-aware, so patterns relying on Unicode character classes will
+    /// behave differently under '--pcre2'.
+    ///
+    /// This requires an fd built with the 'pcre2' feature; other builds reject
+    /// the option.
+    #[arg(
+        long,
+        short = 'P',
+        conflicts_with_all(&["glob", "fixed_strings", "exact", "bash"]),
+        help = "Use the PCRE2 regex engine (look-around, backreferences)",
+        long_help
+    )]
+    pub pcre2: bool,
+
     /// Treat the pattern as a literal string instead of a regular expression. Note
     /// that this also performs substring comparison. If you want to match on an
     /// exact filename, consider using '--glob' or '--exact' instead.

@@ -18,6 +18,9 @@ pub struct Config {
     /// Whether the search is case-sensitive or case-insensitive.
     pub case_sensitive: bool,
 
+    /// Whether to compile search patterns with PCRE2 instead of the default engine.
+    pub pcre2: bool,
+
     /// Cached current working directory for absolute path construction.
     /// Populated when full-path matching is active; `None` means search by filename only.
     pub full_path_base: Option<PathBuf>,

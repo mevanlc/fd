@@ -662,6 +662,111 @@ fn test_regex_overrides_glob() {
     te.assert_output(&["--glob", "--regex", "Foo2$"], "one/two/C.Foo2");
 }
 
+/// Look-around and backreferences are rejected by the default engine.
+#[test]
+fn test_default_engine_rejects_fancy_patterns() {
+    let te = TestEnv::new(DEFAULT_DIRS, DEFAULT_FILES);
+
+    te.assert_failure(&["(?<!test_)main"]);
+    te.assert_failure(&[r"(\w+)_\1"]);
+}
+
+#[cfg(feature = "pcre2")]
+static PCRE2_FILES: &[&str] = &["main.rs", "test_main.rs", "ab_ab.txt", "xy_zw.txt"];
+
+/// PCRE2 (--pcre2) supports look-around, which the default engine cannot express.
+#[cfg(feature = "pcre2")]
+#[test]
+fn test_pcre2_lookaround() {
+    let te = TestEnv::new(&[], PCRE2_FILES);
+
+    te.assert_output(&["--pcre2", r"(?<!test_)main\.rs$"], "main.rs");
+    te.assert_output(&["-P", r"(?<!test_)main\.rs$"], "main.rs");
+
+    // Without the look-behind, both files match.
+    te.assert_output(
+        &["-P", r"main\.rs$"],
+        "main.rs
+        test_main.rs",
+    );
+
+    // Negative look-ahead, against the shared fixture set.
+    let te = TestEnv::new(DEFAULT_DIRS, DEFAULT_FILES);
+    te.assert_output(
+        &["-P", r"[a-c]\.foo(?!2)"],
+        "a.foo
+        one/b.foo
+        one/two/c.foo",
+    );
+}
+
+/// PCRE2 (--pcre2) supports backreferences.
+#[cfg(feature = "pcre2")]
+#[test]
+fn test_pcre2_backreference() {
+    let te = TestEnv::new(&[], PCRE2_FILES);
+
+    te.assert_output(&["-P", r"(\w+)_\1"], "ab_ab.txt");
+}
+
+/// Smart case still applies under --pcre2, including for patterns that
+/// `regex-syntax` cannot parse and so fall back to a raw scan.
+#[cfg(feature = "pcre2")]
+#[test]
+fn test_pcre2_smart_case() {
+    let te = TestEnv::new(DEFAULT_DIRS, DEFAULT_FILES);
+
+    // The uppercase 'F' makes this case-sensitive, even though the look-behind
+    // means the pattern cannot be parsed for the usual smart-case analysis.
+    te.assert_output(&["-P", "(?<!x)Foo"], "one/two/C.Foo2");
+
+    // All-lowercase, so case-insensitive.
+    te.assert_output(
+        &["-P", "(?<!x)foo"],
+        "a.foo
+        one/b.foo
+        one/two/c.foo
+        one/two/C.Foo2
+        one/two/three/d.foo
+        one/two/three/directory_foo/",
+    );
+}
+
+/// PCRE2 matches raw bytes, so '.' matches a single byte rather than a whole
+/// codepoint as it does with the Unicode-aware default engine.
+#[cfg(feature = "pcre2")]
+#[test]
+fn test_pcre2_matches_bytes_not_codepoints() {
+    // U+6587 is three bytes in UTF-8 and has no canonical decomposition, so it
+    // survives the filename normalization some filesystems apply.
+    let te = TestEnv::new(&[], &["a\u{6587}.txt"]);
+
+    te.assert_output(&[r"^a.\.txt$"], "a\u{6587}.txt");
+    te.assert_output(&["-P", r"^a.\.txt$"], "");
+    te.assert_output(&["-P", r"^a...\.txt$"], "a\u{6587}.txt");
+}
+
+/// --pcre2 conflicts with the options that bypass the regex engine.
+#[cfg(feature = "pcre2")]
+#[test]
+fn test_pcre2_conflicts() {
+    let te = TestEnv::new(DEFAULT_DIRS, DEFAULT_FILES);
+
+    te.assert_failure(&["-P", "--glob", "*.foo"]);
+    te.assert_failure(&["-P", "--fixed-strings", "a.foo"]);
+    te.assert_failure(&["-P", "--exact", "a.foo"]);
+    te.assert_failure(&["-P", "--bash", "${} == *.foo"]);
+}
+
+/// Builds without the 'pcre2' feature reject --pcre2 rather than ignoring it.
+#[cfg(not(feature = "pcre2"))]
+#[test]
+fn test_pcre2_unavailable() {
+    let te = TestEnv::new(DEFAULT_DIRS, DEFAULT_FILES);
+
+    te.assert_failure(&["-P", "foo"]);
+}
+
 /// Full path search (--full-path)
 #[test]
 fn test_full_path() {
@@ -3194,6 +3299,32 @@ fn test_invalid_utf8() {
 
     // Should not be found under a different extension
     te.assert_output(&["-e", "zip", "", "test1/"], "");
+}
+
+/// PCRE2's byte mode has no notion of an ill-formed subject, so filenames that
+/// are not valid UTF-8 match as ordinary bytes instead of raising an error.
+#[cfg(all(target_os = "linux", feature = "pcre2"))]
+#[test]
+fn test_pcre2_invalid_utf8() {
+    use std::ffi::OsStr;
+    use std::os::unix::ffi::OsStrExt;
+
+    let dirs = &["test1"];
+    let files = &[];
+    let te = TestEnv::new(dirs, files);
+
+    fs::File::create(
+        te.test_root()
+            .join(OsStr::from_bytes(b"test1/test_\xFEinvalid.txt")),
+    )
+    .unwrap();
+
+    te.assert_output(&["-P", "", "test1/"], "test1/test_�invalid.txt");
+    te.assert_output(&["-P", "invalid", "test1/"], "test1/test_�invalid.txt");
+
+    // The lone 0xFE byte is addressable directly, and '.' spans exactly one byte.
+    te.assert_output(&["-P", r"test_\xFEinvalid"], "test1/test_�invalid.txt");
+    te.assert_output(&["-P", r"^test_.invalid\.txt$"], "test1/test_�invalid.txt");
 }
 
 /// Filtering for file size (--size)

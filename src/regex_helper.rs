@@ -8,7 +8,51 @@ pub fn pattern_has_uppercase_char(pattern: &str) -> bool {
     parser
         .parse(pattern)
         .map(|hir| hir_has_uppercase_char(&hir))
-        .unwrap_or(false)
+        .unwrap_or_else(|_| raw_pattern_has_uppercase_char(pattern))
+}
+
+/// Determine if a regex pattern contains a literal uppercase character by
+/// scanning the pattern text directly.
+///
+/// This is the fallback for patterns `regex-syntax` cannot parse. Under
+/// `--pcre2` that is exactly the look-around and backreference patterns the
+/// engine exists to support, and reporting those as lowercase would silently
+/// turn smart case off for them.
+fn raw_pattern_has_uppercase_char(pattern: &str) -> bool {
+    let mut chars = pattern.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            if c.is_uppercase() {
+                return true;
+            }
+            continue;
+        }
+
+        // A backslash escapes the following character. Skip it, so that `\A`,
+        // `\W`, `\S` and friends are not mistaken for literal uppercase.
+        if chars.next() == Some('x') {
+            // Hex escapes carry digits of their own; skip those too, so that
+            // the `F` in `\x6F` does not register as uppercase.
+            if chars.peek() == Some(&'{') {
+                for c in chars.by_ref() {
+                    if c == '}' {
+                        break;
+                    }
+                }
+            } else {
+                for _ in 0..2 {
+                    if chars.peek().is_some_and(|c| c.is_ascii_hexdigit()) {
+                        chars.next();
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    false
 }
 
 /// Determine if a regex expression contains a literal uppercase character.
@@ -93,6 +137,24 @@ fn pattern_has_uppercase_char_advanced() {
 
     assert!(!pattern_has_uppercase_char(r"\Acargo"));
     assert!(!pattern_has_uppercase_char(r"carg\x6F"));
+}
+
+/// Patterns using look-around or backreferences cannot be parsed by
+/// `regex-syntax`, so these exercise the raw-scan fallback rather than the HIR
+/// walk. They are only compilable by PCRE2, but smart case is decided before
+/// the engine is chosen.
+#[test]
+fn pattern_has_uppercase_char_unparseable() {
+    assert!(pattern_has_uppercase_char(r"(?<!Foo)bar"));
+    assert!(pattern_has_uppercase_char(r"(\w+)_\1_Baz"));
+    assert!(pattern_has_uppercase_char(r"foo(?=BAR)"));
+
+    assert!(!pattern_has_uppercase_char(r"(?<!foo)bar"));
+    assert!(!pattern_has_uppercase_char(r"(\w+)_\1"));
+    // The uppercase letters here are all escape sequences, not literals.
+    assert!(!pattern_has_uppercase_char(r"(?<!\W)\Acargo\B\S"));
+    assert!(!pattern_has_uppercase_char(r"(?<!x)carg\x6F"));
+    assert!(!pattern_has_uppercase_char(r"(?<!x)carg\x{6F}"));
 }
 
 #[test]
