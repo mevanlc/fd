@@ -123,11 +123,13 @@ $ fd -P '(?<!test_)main\.rs$'
 $ fd -P '(\w+)_\1'
 ```
 
-PCRE2 is used in byte mode, so `.` matches a single byte rather than a whole
-codepoint, and `\w`, `\d` and `\s` are ASCII-only. The default engine is
-Unicode-aware, so patterns relying on Unicode character classes behave
-differently under `-P`. It cannot be combined with `--glob`, `--fixed-strings`,
-`--exact` or `--bash`, all of which bypass the regex engine.
+PCRE2 runs in Unicode mode, so `.` matches a whole codepoint and `\w`, `\d` and
+`\s` are Unicode-aware, matching the default engine. Filenames that are not
+valid UTF-8 are still searched rather than raising an error, but their
+ill-formed bytes never match and no pattern can match across them — the default
+engine can target those bytes with `(?-u)`, and PCRE2 has no equivalent. `-P`
+cannot be combined with `--glob`, `--fixed-strings`, `--exact` or `--bash`, all
+of which bypass the regex engine.
 
 Because PCRE2 is a C library, it is behind a non-default cargo feature — builds
 without it reject `-P` rather than ignoring it:

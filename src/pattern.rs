@@ -70,12 +70,20 @@ fn build_pcre2(pattern: &str, case_sensitive: bool) -> Result<Pattern> {
         .caseless(!case_sensitive)
         // Mirrors the default engine's dot_matches_new_line(true).
         .dotall(true)
-        // Byte mode. PCRE2's UTF mode *errors* on a subject that is not valid
-        // UTF-8, which would make fd fail on filenames it currently finds, so
-        // we stay on bytes. The cost is that '.' matches a single byte and the
-        // \w/\d/\s classes are ASCII-only, unlike the default engine which is
-        // Unicode-aware even over byte haystacks.
-        .utf(false)
+        // Unicode mode, to line up with the default engine: '.' matches a whole
+        // codepoint and \w/\d/\s are Unicode-aware.
+        //
+        // `ucp` is what makes this safe on filenames that are not valid UTF-8.
+        // It is not merely PCRE2_UCP: the pcre2 crate also sets PCRE2_UTF and
+        // PCRE2_MATCH_INVALID_UTF alongside it, and the latter downgrades an
+        // ill-formed subject from a match-time *error* to a region that simply
+        // never matches. Setting `.utf(true)` without `.ucp(true)` omits
+        // PCRE2_MATCH_INVALID_UTF and does error on such filenames.
+        //
+        // Unlike the default engine, invalid bytes cannot be targeted
+        // deliberately -- there is no PCRE2 equivalent of `(?-u)`.
+        .utf(true)
+        .ucp(true)
         .jit_if_available(true)
         // PCRE2 defaults to a 32KB JIT stack; ripgrep uses 10MB and notes that
         // 1MB should be enough for anything.

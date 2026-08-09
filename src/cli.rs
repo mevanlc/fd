@@ -183,10 +183,12 @@ pub struct Opts {
     /// PCRE2 supports look-around (e.g. '(?<!foo)bar') and backreferences (e.g.
     /// '(\w+)_\1'), neither of which fd's default engine can express.
     ///
-    /// Note that PCRE2 matches raw bytes: '.' matches a single byte, and the
-    /// '\w', '\d' and '\s' classes are ASCII-only. fd's default engine is
-    /// Unicode-aware, so patterns relying on Unicode character classes will
-    /// behave differently under '--pcre2'.
+    /// PCRE2 runs in Unicode mode, so '.' matches a whole codepoint and the
+    /// '\w', '\d' and '\s' classes are Unicode-aware, as they are with the
+    /// default engine. A filename that is not valid UTF-8 is still searched,
+    /// but the ill-formed bytes themselves never match, and no pattern can
+    /// match across them. There is no PCRE2 equivalent of the default engine's
+    /// '(?-u)' for matching such bytes deliberately.
     ///
     /// This requires an fd built with the 'pcre2' feature; other builds reject
     /// the option.

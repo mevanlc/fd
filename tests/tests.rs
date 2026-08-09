@@ -732,18 +732,24 @@ fn test_pcre2_smart_case() {
     );
 }
 
-/// PCRE2 matches raw bytes, so '.' matches a single byte rather than a whole
-/// codepoint as it does with the Unicode-aware default engine.
+/// PCRE2 runs in Unicode mode, so '.' spans a whole codepoint and the \w class
+/// is Unicode-aware, matching the default engine rather than raw bytes.
 #[cfg(feature = "pcre2")]
 #[test]
-fn test_pcre2_matches_bytes_not_codepoints() {
+fn test_pcre2_matches_codepoints_not_bytes() {
     // U+6587 is three bytes in UTF-8 and has no canonical decomposition, so it
     // survives the filename normalization some filesystems apply.
     let te = TestEnv::new(&[], &["a\u{6587}.txt"]);
 
     te.assert_output(&[r"^a.\.txt$"], "a\u{6587}.txt");
-    te.assert_output(&["-P", r"^a.\.txt$"], "");
-    te.assert_output(&["-P", r"^a...\.txt$"], "a\u{6587}.txt");
+    te.assert_output(&["-P", r"^a.\.txt$"], "a\u{6587}.txt");
+
+    // Byte mode would need three dots here; Unicode mode must not match.
+    te.assert_output(&["-P", r"^a...\.txt$"], "");
+
+    // PCRE2_UCP: \w covers non-ASCII letters, as it does in the default engine.
+    te.assert_output(&[r"^\w\w\.txt$"], "a\u{6587}.txt");
+    te.assert_output(&["-P", r"^\w\w\.txt$"], "a\u{6587}.txt");
 }
 
 /// --pcre2 conflicts with the options that bypass the regex engine.
@@ -3301,8 +3307,10 @@ fn test_invalid_utf8() {
     te.assert_output(&["-e", "zip", "", "test1/"], "");
 }
 
-/// PCRE2's byte mode has no notion of an ill-formed subject, so filenames that
-/// are not valid UTF-8 match as ordinary bytes instead of raising an error.
+/// PCRE2_MATCH_INVALID_UTF (which the pcre2 crate sets alongside PCRE2_UCP)
+/// downgrades an ill-formed subject from a match-time error to a region that
+/// simply never matches, so filenames that are not valid UTF-8 are still
+/// searchable rather than fatal.
 #[cfg(all(target_os = "linux", feature = "pcre2"))]
 #[test]
 fn test_pcre2_invalid_utf8() {
@@ -3319,12 +3327,16 @@ fn test_pcre2_invalid_utf8() {
     )
     .unwrap();
 
+    // No error, and the valid runs on either side of the bad byte still match.
     te.assert_output(&["-P", "", "test1/"], "test1/test_�invalid.txt");
     te.assert_output(&["-P", "invalid", "test1/"], "test1/test_�invalid.txt");
+    te.assert_output(&["-P", "^test_", "test1/"], "test1/test_�invalid.txt");
 
-    // The lone 0xFE byte is addressable directly, and '.' spans exactly one byte.
-    te.assert_output(&["-P", r"test_\xFEinvalid"], "test1/test_�invalid.txt");
-    te.assert_output(&["-P", r"^test_.invalid\.txt$"], "test1/test_�invalid.txt");
+    // The 0xFE byte itself is unmatchable: nothing matches it, and no pattern
+    // can span it. PCRE2 has no equivalent of the default engine's '(?-u)'.
+    te.assert_output(&["-P", r"test_\xFEinvalid"], "");
+    te.assert_output(&["-P", r"^test_.invalid\.txt$"], "");
+    te.assert_output(&["-P", r"^test_.*\.txt$"], "");
 }
 
 /// Filtering for file size (--size)

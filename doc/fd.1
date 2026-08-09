@@ -120,8 +120,9 @@ Perform a regular-expression based search (default). This can be used to overrid
 .B \-P, \-\-pcre2
 Use the PCRE2 regular expression engine instead of fd's default engine. PCRE2 supports
 look\-around (e.g. '(?<!foo)bar') and backreferences (e.g. '(\\w+)_\\1'), neither of which the
-default engine can express. Note that PCRE2 matches raw bytes: '.' matches a single byte, and the
-'\\w', '\\d' and '\\s' classes are ASCII\-only, whereas the default engine is Unicode\-aware.
+default engine can express. PCRE2 runs in Unicode mode, matching the default engine's treatment of
+'.' and of the '\\w', '\\d' and '\\s' classes. Filenames that are not valid UTF\-8 are still
+searched, but their ill\-formed bytes never match and no pattern can match across them.
 Requires an fd built with the 'pcre2' feature. Cannot be used together with '\-\-glob',
 '\-\-fixed\-strings', '\-\-exact', or '\-\-bash'.
 .TP
@@ -667,9 +668,11 @@ instead, which supports both; its syntax is documented here:
 
     https://www.pcre.org/current/doc/html/pcre2pattern.html
 
-PCRE2 is used in byte mode, so '.' matches a single byte rather than a whole codepoint, and the
-'\\w', '\\d' and '\\s' classes match ASCII only. The default engine is Unicode\-aware, so patterns
-that rely on Unicode character classes behave differently under '\-\-pcre2'.
+PCRE2 is used in Unicode mode, so '.' matches a whole codepoint and the '\\w', '\\d' and '\\s'
+classes are Unicode\-aware, just as they are with the default engine. A filename that is not valid
+UTF\-8 is still searched rather than raising an error, but its ill\-formed bytes never match and no
+pattern can match across them; the default engine can target such bytes with '(?\-u)', and PCRE2
+has no equivalent.
 
 The glob syntax is documented here:
 
