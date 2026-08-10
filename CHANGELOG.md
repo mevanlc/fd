@@ -28,6 +28,10 @@
   path placeholder; `-x` and `--format` reject it.
 
 ## Bugfixes
+- On Windows, make full-path `--exact` patterns accept `/` and `\` as
+  equivalent path separators, and normalize full-path glob candidates as
+  `globset` expects. This also repairs `--and` globs and path globs in
+  matchsets without changing `--path-separator` or regex semantics.
 - Sanitize control characters and bidirectional override characters in filenames
   when output goes to a terminal, to prevent terminal escape-sequence injection.
   Also reject a placeholder as the executable for `--exec-batch`, while still

@@ -156,6 +156,8 @@ fn run() -> Result<ExitCode> {
             .collect::<Result<Vec<String>>>()?
     };
 
+    let patterns_are_globs = opts.glob;
+
     let config = construct_config(opts, &pattern_regexps, bash_patterns, prune_if, exclude_if)?;
 
     if !config.uses_bash_patterns() {
@@ -167,7 +169,14 @@ fn run() -> Result<ExitCode> {
     } else {
         pattern_regexps
             .iter()
-            .map(|pat| Pattern::build(pat, config.case_sensitive, config.pcre2))
+            .map(|pat| {
+                Pattern::build(
+                    pat,
+                    config.case_sensitive,
+                    config.pcre2,
+                    patterns_are_globs && !pat.is_empty(),
+                )
+            })
             .collect::<Result<Vec<Pattern>>>()?
     };
 
@@ -285,13 +294,39 @@ fn build_pattern_regex(pattern: &str, opts: &Opts) -> Result<String> {
     } else if opts.exact {
         // Anchor the escaped pattern so the full filename (or path) must match exactly.
         // Literal. No substring matching.
-        format!("^{}$", regex::escape(pattern))
+        #[cfg(windows)]
+        let escaped = if opts.uses_full_path_matching() {
+            escape_windows_exact_path(pattern)
+        } else {
+            regex::escape(pattern)
+        };
+        #[cfg(not(windows))]
+        let escaped = regex::escape(pattern);
+        format!("^{escaped}$")
     } else if opts.fixed_strings {
         // Treat pattern as literal string if '--fixed-strings' is used
         regex::escape(pattern)
     } else {
         String::from(pattern)
     })
+}
+
+/// Escape a literal Windows path while accepting either path-separator
+/// spelling at every separator position.
+#[cfg(any(windows, test))]
+fn escape_windows_exact_path(pattern: &str) -> String {
+    let mut escaped = String::with_capacity(pattern.len());
+    let mut run_start = 0;
+
+    for (index, character) in pattern.char_indices() {
+        if character == '/' || character == '\\' {
+            escaped.push_str(&regex::escape(&pattern[run_start..index]));
+            escaped.push_str(r"[/\\]");
+            run_start = index + character.len_utf8();
+        }
+    }
+    escaped.push_str(&regex::escape(&pattern[run_start..]));
+    escaped
 }
 
 fn check_path_separator_length(path_separator: Option<&str>) -> Result<()> {
@@ -545,5 +580,32 @@ fn ensure_use_hidden_option_for_leading_dot_pattern(
         ))
     } else {
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::escape_windows_exact_path;
+
+    #[test]
+    fn windows_exact_path_escape_accepts_separator_spellings() {
+        let candidates = [
+            r"C:\work\repo\src/main.rs",
+            "C:/work/repo/src/main.rs",
+            r"C:\work/repo\src/main.rs",
+        ];
+
+        for pattern in candidates {
+            let regex =
+                regex::Regex::new(&format!("^{}$", escape_windows_exact_path(pattern))).unwrap();
+            for candidate in candidates {
+                assert!(
+                    regex.is_match(candidate),
+                    "{pattern:?} did not match {candidate:?}"
+                );
+            }
+            assert!(!regex.is_match(r"C:\work\repo\main.rs"));
+            assert!(!regex.is_match(r"C:\work\repo\src\extra\main.rs"));
+        }
     }
 }

@@ -599,7 +599,6 @@ fn test_glob_searches() {
 }
 
 /// Glob-based searches (--glob) in combination with full path searches (--full-path)
-#[cfg(not(windows))] // TODO: make this work on Windows
 #[test]
 fn test_full_path_glob_searches() {
     let te = TestEnv::new(DEFAULT_DIRS, DEFAULT_FILES);
@@ -620,6 +619,45 @@ fn test_full_path_glob_searches() {
         &["--glob", "--full-path", "**/one/*/*/*.foo"],
         " one/two/three/d.foo",
     );
+
+    // Every --and pattern is matched against the same normalized candidate.
+    te.assert_output(
+        &[
+            "--glob",
+            "--full-path",
+            "**/one/**/*.foo",
+            "--and",
+            "**/two/**/*.foo",
+        ],
+        "one/two/c.foo
+        one/two/three/d.foo",
+    );
+
+    // Output presentation is independent from the path spelling used while matching.
+    te.assert_output(
+        &[
+            "--glob",
+            "--full-path",
+            "**/one/**/*.foo",
+            "--path-separator",
+            "=",
+        ],
+        "one=b.foo
+        one=two=c.foo
+        one=two=three=d.foo",
+    );
+}
+
+#[cfg(windows)]
+#[test]
+fn test_full_path_glob_windows_separator_spellings() {
+    let te = TestEnv::new(DEFAULT_DIRS, DEFAULT_FILES);
+    let expected = "one/b.foo
+        one/two/c.foo
+        one/two/three/d.foo";
+
+    te.assert_output(&["--glob", "--full-path", "**/one/**/*.foo"], expected);
+    te.assert_output(&["--glob", "--full-path", r"**\one\**\*.foo"], expected);
 }
 
 #[test]
@@ -1488,6 +1526,32 @@ fn test_matchsets_include_entries() {
         ".DS_Store
         .venv/
         node_modules/",
+    );
+}
+
+#[test]
+fn test_matchsets_path_globs_use_path_separators() {
+    let te = TestEnv::new(
+        &["one/two/deep"],
+        &["one/two/main.rs", "one/two/deep/lib.rs", "one/other.txt"],
+    );
+    fs::write(
+        te.test_root().join("sets.kdl"),
+        r#"
+        "direct" { (f) path glob full { "one/*/*.rs" } }
+        "recursive" { (f) path glob full { "one/**/*.rs" } }
+    "#,
+    )
+    .unwrap();
+
+    te.assert_output(
+        &["--matchset-file", "sets.kdl", "-m", "direct", "."],
+        "one/two/main.rs",
+    );
+    te.assert_output(
+        &["--matchset-file", "sets.kdl", "-m", "recursive", "."],
+        "one/two/deep/lib.rs
+        one/two/main.rs",
     );
 }
 
@@ -3269,6 +3333,80 @@ fn test_exact_literal_nonsubstring() {
     te.assert_output(
         &["-p", "-td", "--exact", test1_path.to_str().unwrap()],
         "test1/",
+    );
+}
+
+#[cfg(windows)]
+#[test]
+fn test_exact_windows_path_separator_spellings() {
+    let dirs = &["parent/test1", "parent/test2", "parent/CaseDir"];
+    let te = TestEnv::new(dirs, &[]);
+    let root = Path::new(&get_absolute_root_path(&te)).join("parent");
+    let native = root.join("test1").to_string_lossy().into_owned();
+    let backslashes = native.replace('/', r"\");
+    let slashes = native.replace('\\', "/");
+    let mut slash_next = true;
+    let mixed = native
+        .chars()
+        .map(|character| {
+            if character == '/' || character == '\\' {
+                let separator = if slash_next { '/' } else { '\\' };
+                slash_next = !slash_next;
+                separator
+            } else {
+                character
+            }
+        })
+        .collect::<String>();
+
+    for pattern in [&backslashes, &slashes, &mixed] {
+        te.assert_output(&["-p", "-td", "--exact", pattern], "parent/test1/");
+    }
+
+    // Components and separator count remain exact.
+    let changed = root.join("missing").to_string_lossy().replace('\\', "/");
+    let missing = Path::new(&get_absolute_root_path(&te))
+        .join("test1")
+        .to_string_lossy()
+        .replace('\\', "/");
+    let extra = root
+        .join("test1/extra")
+        .to_string_lossy()
+        .replace('\\', "/");
+    for pattern in [&changed, &missing, &extra] {
+        te.assert_output(&["-p", "-td", "--exact", pattern], "");
+    }
+
+    // A separator-free exact pattern still selects basename matching under -p.
+    te.assert_output(&["-p", "-td", "--exact", "test1"], "parent/test1/");
+
+    // Existing case controls apply unchanged to separator-equivalent paths.
+    let case_path = root.join("CaseDir").to_string_lossy().replace('\\', "/");
+    let lowercase_case_path = case_path.to_lowercase();
+    te.assert_output(
+        &["-p", "-td", "--exact", &lowercase_case_path],
+        "parent/CaseDir/",
+    );
+    let smart_case_path = lowercase_case_path.replace("casedir", "CASEdir");
+    te.assert_output(&["-p", "-td", "--exact", &smart_case_path], "");
+    te.assert_output(&["-p", "-td", "-s", "--exact", &lowercase_case_path], "");
+    te.assert_output(
+        &["-p", "-td", "-i", "--exact", &lowercase_case_path],
+        "parent/CaseDir/",
+    );
+
+    // Output separators remain presentation-only, including arbitrary values.
+    te.assert_output(
+        &["-p", "-td", "--exact", &slashes, "--path-separator", "/"],
+        "parent/test1/",
+    );
+    te.assert_output(
+        &["-p", "-td", "--exact", &slashes, "--path-separator", r"\"],
+        "parent/test1/",
+    );
+    te.assert_output(
+        &["-p", "-td", "--exact", &slashes, "--path-separator", "="],
+        "parent=test1=",
     );
 }
 

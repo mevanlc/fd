@@ -184,10 +184,11 @@ text changes.
 ### Windows note
 
 The haystack for full/partial scope is the joined absolute path with native
-`\` separators. For the `--exact` anchor use `(?:^|[/\\])` on Windows (`/`
-is harmless to include unconditionally; simplest is one cfg'd constant).
-The glob mode inherits `globset`'s existing `/`-only separator handling —
-same jank as `--full-path --glob` today; explicitly out of scope to fix.
+`\` separators. Full-path `--exact` now escapes literal Windows separators as
+`[/\\]`, and a partial-path exact suffix will likewise need
+`(?:^|[/\\])` at its leading component boundary. Full-path glob regexes retain
+their glob origin so their Windows candidates are normalized to `/` before
+matching; partial-path globs must use the same tagged matcher path.
 
 ## The `f` alias
 

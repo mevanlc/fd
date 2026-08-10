@@ -15,6 +15,7 @@ use crate::bash_cond;
 use crate::config::Config;
 use crate::dir_entry::DirEntry;
 use crate::filesystem;
+use crate::pattern::RegexMatcher;
 
 static BUILTIN_MATCHSETS: &str = include_str!("matchset_builtins.kdl");
 
@@ -104,14 +105,14 @@ enum PatternKind {
 
 #[derive(Clone)]
 enum Matcher {
-    Regex(Regex),
+    Regex(RegexMatcher),
     Bash(bash_cond::Condition),
     /// A pattern led by a location variable (`$<home>/...`, `$<vroot>/...`):
     /// the last `depth` components of the entry's absolute path must match
     /// `tail`, and the remaining prefix must be the anchor location.
     Anchored {
         anchor: Anchor,
-        tail: Regex,
+        tail: RegexMatcher,
         depth: usize,
     },
 }
@@ -158,7 +159,7 @@ impl CompiledMatchClause {
     }
 }
 
-fn matches_anchored(path: &Path, anchor: &Anchor, tail: &Regex, depth: usize) -> bool {
+fn matches_anchored(path: &Path, anchor: &Anchor, tail: &RegexMatcher, depth: usize) -> bool {
     let Ok(absolute) = std::path::absolute(path) else {
         return false;
     };
@@ -787,11 +788,11 @@ fn compile_clause_pattern(
     let tail_regex = match pattern_kind {
         PatternKind::Literal => {
             let native = components.join(std::path::MAIN_SEPARATOR_STR);
-            build_regex(&format!("^{}$", regex::escape(&native)))?
+            RegexMatcher::native(build_regex(&format!("^{}$", regex::escape(&native)))?)
         }
         PatternKind::Glob => {
             let glob = GlobBuilder::new(tail).literal_separator(true).build()?;
-            build_regex(glob.regex())?
+            RegexMatcher::glob(build_regex(glob.regex())?)
         }
         PatternKind::Regex => unreachable!("rejected above"),
     };
@@ -856,18 +857,24 @@ fn compile_matcher(pattern: &str, pattern_kind: PatternKind, mode: Mode) -> Resu
                 Mode::Full => format!("^{}$", regex::escape(pattern)),
                 Mode::Partial => regex::escape(pattern),
             };
-            build_regex(&regex).map(Matcher::Regex)
+            build_regex(&regex)
+                .map(RegexMatcher::native)
+                .map(Matcher::Regex)
         }
         PatternKind::Glob => {
             let glob = GlobBuilder::new(pattern).literal_separator(true).build()?;
-            build_regex(glob.regex()).map(Matcher::Regex)
+            build_regex(glob.regex())
+                .map(RegexMatcher::glob)
+                .map(Matcher::Regex)
         }
         PatternKind::Regex => {
             let regex = match mode {
                 Mode::Full => format!("^(?:{pattern})$"),
                 Mode::Partial => pattern.to_string(),
             };
-            build_regex(&regex).map(Matcher::Regex)
+            build_regex(&regex)
+                .map(RegexMatcher::native)
+                .map(Matcher::Regex)
         }
     }
 }
@@ -1127,7 +1134,8 @@ mod tests {
     #[test]
     fn anchored_home_matching_uses_prefix_equality() {
         let anchor = Anchor::Home(vec![PathBuf::from("/home/me")]);
-        let tail = build_regex(&format!("^{}$", regex::escape(".Trash"))).unwrap();
+        let tail =
+            RegexMatcher::native(build_regex(&format!("^{}$", regex::escape(".Trash"))).unwrap());
 
         assert!(matches_anchored(
             Path::new("/home/me/.Trash"),
@@ -1154,6 +1162,24 @@ mod tests {
             &anchor,
             &tail,
             1
+        ));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn anchored_glob_matching_normalizes_windows_separators() {
+        let anchor = Anchor::Home(vec![PathBuf::from(r"C:\Users\me")]);
+        let glob = GlobBuilder::new("Trash-*/*")
+            .literal_separator(true)
+            .build()
+            .unwrap();
+        let tail = RegexMatcher::glob(build_regex(glob.regex()).unwrap());
+
+        assert!(matches_anchored(
+            Path::new(r"C:\Users\me\Trash-1000\deleted.txt"),
+            &anchor,
+            &tail,
+            2,
         ));
     }
 
