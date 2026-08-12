@@ -167,6 +167,17 @@ pub struct Config {
 }
 
 impl Config {
+    /// The separator used for paths leaving fd. On Windows, returning the
+    /// native separator explicitly also normalizes separators retained from
+    /// search roots such as `.`.
+    pub fn effective_path_separator(&self) -> Option<&str> {
+        if cfg!(windows) {
+            Some(&self.actual_path_separator)
+        } else {
+            self.path_separator.as_deref()
+        }
+    }
+
     /// Check whether results are being printed.
     pub fn is_printing(&self) -> bool {
         self.command.is_none()

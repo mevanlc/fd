@@ -33,7 +33,7 @@ pub fn job(
         // Generate a command, execute it and store its exit code.
         let code = cmd.execute(
             dir_entry.stripped_path(config),
-            config.path_separator.as_deref(),
+            config.effective_path_separator(),
             config.null_separator,
             buffer_output,
         );
@@ -60,5 +60,5 @@ pub fn batch(
             }
         });
 
-    cmd.execute_batch(paths, config.batch_size, config.path_separator.as_deref())
+    cmd.execute_batch(paths, config.batch_size, config.effective_path_separator())
 }

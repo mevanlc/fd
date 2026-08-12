@@ -3701,6 +3701,7 @@ fn test_sort_with_list_details_uses_sorted_order() {
                 .last()
                 .unwrap()
                 .trim_start_matches("./")
+                .trim_start_matches(".\\")
         })
         .collect();
     assert_eq!(names, vec!["z_old", "a_new"]);
@@ -3854,6 +3855,27 @@ fn test_custom_path_separator() {
         one=two=three=d.foo
         one=two=three=directory_foo=",
     );
+}
+
+#[cfg(windows)]
+#[test]
+fn test_windows_default_path_separator_is_consistent() {
+    // An explicit `.` search root is retained as `./` by the walker. Native
+    // Windows output must normalize that prefix as well as later components.
+    let te = TestEnv::new(DEFAULT_DIRS, DEFAULT_FILES).env("MSYSTEM", "");
+    let output = te.assert_success_and_get_output(".", &["--glob", "one", "."]);
+
+    assert_eq!(String::from_utf8_lossy(&output.stdout), ".\\one\\\n");
+
+    // Explicit overrides still control every separator in the path.
+    let output =
+        te.assert_success_and_get_output(".", &["--glob", "one", ".", "--path-separator", "/"]);
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "./one/\n");
+
+    // Preserve the existing MSYS default without trying to detect the parent shell.
+    let te = TestEnv::new(DEFAULT_DIRS, DEFAULT_FILES).env("MSYSTEM", "MINGW64");
+    let output = te.assert_success_and_get_output(".", &["--glob", "one", "."]);
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "./one/\n");
 }
 
 #[test]

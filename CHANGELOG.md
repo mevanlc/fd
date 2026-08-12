@@ -28,6 +28,9 @@
   path placeholder; `-x` and `--format` reject it.
 
 ## Bugfixes
+- On native Windows, consistently use `\\` in output paths, including the
+  prefix retained from an explicit `.` search root. MSYS still defaults to `/`,
+  and `--path-separator` continues to override either default.
 - On Windows, make full-path `--exact` patterns accept `/` and `\` as
   equivalent path separators, and normalize full-path glob candidates as
   `globset` expects. This also repairs `--and` globs and path globs in

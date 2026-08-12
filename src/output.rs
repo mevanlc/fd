@@ -28,6 +28,10 @@ const RECENT_TIME_FORMAT: &str = "%b %e %H:%M";
 const OLDER_TIME_FORMAT: &str = "%b %e  %Y";
 
 fn replace_path_separator(path: &str, new_path_separator: &str) -> String {
+    #[cfg(windows)]
+    return path.replace(&['/', '\\'][..], new_path_separator);
+
+    #[cfg(not(windows))]
     path.replace(std::path::MAIN_SEPARATOR, new_path_separator)
 }
 
@@ -95,7 +99,7 @@ fn print_entry_list_details<W: Write>(
 
 fn format_path_with_symlink_target(entry: &DirEntry, config: &Config) -> String {
     let mut path = entry.stripped_path(config).to_string_lossy().to_string();
-    if let Some(ref separator) = config.path_separator {
+    if let Some(separator) = config.effective_path_separator() {
         path = replace_path_separator(&path, separator);
     }
 
@@ -107,7 +111,7 @@ fn format_path_with_symlink_target(entry: &DirEntry, config: &Config) -> String 
         && let Ok(target) = std::fs::read_link(entry.path())
     {
         let mut target = target.to_string_lossy().to_string();
-        if let Some(ref separator) = config.path_separator {
+        if let Some(separator) = config.effective_path_separator() {
             target = replace_path_separator(&target, separator);
         }
         path.push_str(" -> ");
@@ -308,7 +312,7 @@ fn print_entry_format<W: Write>(
 ) -> io::Result<()> {
     let output = format.generate(
         entry.stripped_path(config),
-        config.path_separator.as_deref(),
+        config.effective_path_separator(),
     );
     // TODO: support writing raw bytes on unix?
     let s = output.to_string_lossy();
@@ -343,7 +347,7 @@ fn print_entry_colorized<W: Write>(
 
     if offset > 0 {
         let mut parent_str = Cow::from(&path_str[..offset]);
-        if let Some(ref separator) = config.path_separator {
+        if let Some(separator) = config.effective_path_separator() {
             *parent_str.to_mut() = replace_path_separator(&parent_str, separator);
         }
 
@@ -381,7 +385,7 @@ fn print_entry_uncolorized_base<W: Write>(
     let path = entry.stripped_path(config);
 
     let mut path_string = path.to_string_lossy();
-    if let Some(ref separator) = config.path_separator {
+    if let Some(separator) = config.effective_path_separator() {
         *path_string.to_mut() = replace_path_separator(&path_string, separator);
     }
     let safe = maybe_sanitize(&path_string, config.interactive_terminal);
@@ -406,7 +410,7 @@ fn print_entry_uncolorized<W: Write>(
 ) -> io::Result<()> {
     use std::os::unix::ffi::OsStrExt;
 
-    if config.interactive_terminal || config.path_separator.is_some() {
+    if config.interactive_terminal || config.effective_path_separator().is_some() {
         print_entry_uncolorized_base(stdout, entry, config)
     } else {
         // Piped output: raw bytes so invalid UTF-8 filenames reach downstream tools intact.
