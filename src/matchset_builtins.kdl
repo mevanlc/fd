@@ -22,7 +22,11 @@
 "build_output" {
     (d) bash {
         (rust) "${/} == target && -f CACHEDIR.TAG"
-        (gradle) "${/} == build && [[ -f ../gradle.properties || -f ../build.gradle.kts || -f ../build.gradle ]]"
+        (gradle) """
+            ${/} == build
+            && [[ -f ../build.gradle.kts || -f ../build.gradle ]]
+            && [[ -d reports || -d generated || -d classes || -d tmp || -d intermediates || -d outputs ]]
+            """
     }
 }
 
@@ -45,6 +49,10 @@
 }
 
 "os_meta" {
+    (f) bash {
+        // macos exfat resource fork sidecar files
+        (macos) "[[ ${/} == ._* ]] && [[ -e ${/#._} ]]"
+    }
     (f) name literal full {
         (macos) ".DS_Store"
     }
