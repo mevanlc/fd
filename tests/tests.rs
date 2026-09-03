@@ -1863,6 +1863,23 @@ fn test_matchsets_no_user_matchsets_keeps_builtins() {
 }
 
 #[test]
+fn test_matchsets_os_meta_matches_appledouble_sidecars_with_companions() {
+    let te = TestEnv::new(
+        &["nested"],
+        &[
+            "nested/photo.jpg",
+            "nested/._photo.jpg",
+            "nested/._orphan.jpg",
+        ],
+    );
+
+    te.assert_output(
+        &["--hidden", "--no-ignore", "-m", "os_meta", "."],
+        "nested/._photo.jpg",
+    );
+}
+
+#[test]
 fn test_matchsets_list_builtins() {
     let te = TestEnv::new(&["src"], &["src/main.rs"]);
 
@@ -1871,7 +1888,7 @@ fn test_matchsets_list_builtins() {
         "NAME          SOURCE   CLAUSES
         build_output  builtin  2 (d) bash
         cache         builtin  2 (d) name literal full, 1 (d) bash
-        os_meta       builtin  1 (f) name literal full, 1 (d) path literal full
+        os_meta       builtin  1 (f) bash, 1 (f) name literal full, 1 (d) path literal full
         package       builtin  3 (d) name literal full
         trash         builtin  2 (d) path literal full, 2 (d) path literal full, 1 (d) path glob full
         vcs_meta      builtin  4 (d) name literal full, 1 (f) name literal full",

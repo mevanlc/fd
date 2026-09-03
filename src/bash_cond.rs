@@ -236,6 +236,14 @@ fn os_to_string(value: &std::ffi::OsStr) -> String {
 
 fn entry_env(path: &Path, config: &Config) -> MapEnv {
     let basename = path.file_name().unwrap_or(path.as_os_str());
+    let basename_value = os_to_string(basename);
+    // Internal value for the os_meta built-in. bash-condexp intentionally only
+    // supports variable expansion, so compute the companion of an AppleDouble
+    // `._*` sidecar here instead of relying on Bash prefix substitution.
+    let appledouble_companion = basename_value
+        .strip_prefix("._")
+        .unwrap_or_default()
+        .to_owned();
     let parent = path
         .parent()
         .filter(|p| !p.as_os_str().is_empty())
@@ -245,10 +253,11 @@ fn entry_env(path: &Path, config: &Config) -> MapEnv {
 
     MapEnv::new()
         .with_var("", path_to_string(path))
-        .with_var("/", os_to_string(basename))
+        .with_var("/", basename_value)
         .with_var("//", path_to_string(parent))
         .with_var(".", path_to_string(&no_ext))
         .with_var("/.", path_to_string(&basename_no_ext))
+        .with_var("fd_appledouble_companion", appledouble_companion)
         .with_option("nocasematch", !config.case_sensitive)
 }
 

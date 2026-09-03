@@ -62,7 +62,7 @@ Built-in matchsets are embedded in the binary:
 | `build_output` | context-sensitive Rust and Gradle build directories |
 | `cache` | `__pycache__`, `.cache` and directories containing `CACHEDIR.TAG` |
 | `package` | `node_modules`, `__pypackages__` and `.venv` |
-| `os_meta` | `.DS_Store` and `System Volume Information` at volume roots |
+| `os_meta` | `.DS_Store`, paired AppleDouble `._*` sidecars and `System Volume Information` at volume roots |
 | `trash` | macOS, FreeDesktop and Windows trash locations |
 
 Custom sets use [KDL](https://kdl.dev/) and normally live in

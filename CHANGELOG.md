@@ -28,6 +28,8 @@
   path placeholder; `-x` and `--format` reject it.
 
 ## Bugfixes
+- Fix the built-in `os_meta` matchset so paired AppleDouble `._*` sidecar files
+  are actually matched.
 - On native Windows, consistently use `\\` in output paths, including the
   prefix retained from an explicit `.` search root. MSYS still defaults to `/`,
   and `--path-separator` continues to override either default.
