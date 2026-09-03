@@ -122,10 +122,8 @@ practice.
     --no-partial-path      (hidden) reset to filename matching; alias --no-full-path
 ```
 
-- Long-only for now. `-P` is free (checked 2026-07-14) and mnemonic, but the
-  alias bakes the flag so per-invocation typing should be rare; a short can
-  be added later without breakage. (Old `f` used `-P` for prune/exclude-if —
-  a reason to hesitate before reusing the letter.)
+- Long-only. `-P` is assigned to `--no-full-path`, so `--partial-path` has no
+  short spelling.
 - Override matrix (clap, mutual last-wins):
   - `full_path`: add `overrides_with = "partial_path"`.
   - `partial_path: bool` (new, visible): `overrides_with = "full_path"`.
@@ -267,8 +265,7 @@ the established sweep pattern.
 
 ## Open questions
 
-1. Short flag: reserve `-P` now, later, or never? (Plan says: later, if it
-   earns it.)
+1. Short flag: none; `-P` belongs to `--no-full-path`.
 2. Should the `-p` long help / man entry actively steer alias authors toward
    `--partial-path`? (Plan says: yes, one cross-referencing sentence.)
 3. `--exact` + component-run semantics ("the entry *and* its subtree") — if

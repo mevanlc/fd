@@ -2,8 +2,8 @@
 //!
 //! fd matches against raw path bytes, which may not be valid UTF-8 on Unix, so
 //! both engines here are byte-oriented. The default engine is the `regex`
-//! crate, which has no lookaround or backreferences. Passing `-P`/`--pcre2`
-//! selects PCRE2 instead, which supports both.
+//! crate, which has no lookaround or backreferences. Passing `--pcre2` selects
+//! PCRE2 instead, which supports both.
 
 use anyhow::Result;
 use regex::bytes::Regex;
@@ -20,10 +20,11 @@ const REGEX_ERROR_HINT: &str = concat!(
 );
 
 /// Appended to a compilation failure from PCRE2. `--fixed-strings`, `--exact`
-/// and `--glob` all conflict with `-P`, so the hint has to mention dropping it.
+/// and `--glob` all conflict with `--pcre2`, so the hint has to mention dropping
+/// it.
 #[cfg(feature = "pcre2")]
 const PCRE2_ERROR_HINT: &str = concat!(
-    "Note: This pattern was compiled with PCRE2 ('-P'/'--pcre2'). Drop '-P' to use ",
+    "Note: This pattern was compiled with PCRE2 ('--pcre2'). Drop '--pcre2' to use ",
     "fd's default regex engine, or search for literal text with the '--fixed-strings' ",
     "or '--exact' options.",
 );
@@ -167,7 +168,7 @@ fn build_pcre2(pattern: &str, case_sensitive: bool) -> Result<Pattern> {
 fn build_pcre2(_pattern: &str, _case_sensitive: bool) -> Result<Pattern> {
     anyhow::bail!(
         "PCRE2 is not available in this build of fd. \
-         Rebuild fd with '--features pcre2' to use '-P'/'--pcre2'."
+         Rebuild fd with '--features pcre2' to use '--pcre2'."
     )
 }
 

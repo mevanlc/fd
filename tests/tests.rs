@@ -719,11 +719,9 @@ fn test_pcre2_lookaround() {
     let te = TestEnv::new(&[], PCRE2_FILES);
 
     te.assert_output(&["--pcre2", r"(?<!test_)main\.rs$"], "main.rs");
-    te.assert_output(&["-P", r"(?<!test_)main\.rs$"], "main.rs");
-
     // Without the look-behind, both files match.
     te.assert_output(
-        &["-P", r"main\.rs$"],
+        &["--pcre2", r"main\.rs$"],
         "main.rs
         test_main.rs",
     );
@@ -731,7 +729,7 @@ fn test_pcre2_lookaround() {
     // Negative look-ahead, against the shared fixture set.
     let te = TestEnv::new(DEFAULT_DIRS, DEFAULT_FILES);
     te.assert_output(
-        &["-P", r"[a-c]\.foo(?!2)"],
+        &["--pcre2", r"[a-c]\.foo(?!2)"],
         "a.foo
         one/b.foo
         one/two/c.foo",
@@ -744,7 +742,7 @@ fn test_pcre2_lookaround() {
 fn test_pcre2_backreference() {
     let te = TestEnv::new(&[], PCRE2_FILES);
 
-    te.assert_output(&["-P", r"(\w+)_\1"], "ab_ab.txt");
+    te.assert_output(&["--pcre2", r"(\w+)_\1"], "ab_ab.txt");
 }
 
 /// Smart case still applies under --pcre2, including for patterns that
@@ -756,11 +754,11 @@ fn test_pcre2_smart_case() {
 
     // The uppercase 'F' makes this case-sensitive, even though the look-behind
     // means the pattern cannot be parsed for the usual smart-case analysis.
-    te.assert_output(&["-P", "(?<!x)Foo"], "one/two/C.Foo2");
+    te.assert_output(&["--pcre2", "(?<!x)Foo"], "one/two/C.Foo2");
 
     // All-lowercase, so case-insensitive.
     te.assert_output(
-        &["-P", "(?<!x)foo"],
+        &["--pcre2", "(?<!x)foo"],
         "a.foo
         one/b.foo
         one/two/c.foo
@@ -780,14 +778,14 @@ fn test_pcre2_matches_codepoints_not_bytes() {
     let te = TestEnv::new(&[], &["a\u{6587}.txt"]);
 
     te.assert_output(&[r"^a.\.txt$"], "a\u{6587}.txt");
-    te.assert_output(&["-P", r"^a.\.txt$"], "a\u{6587}.txt");
+    te.assert_output(&["--pcre2", r"^a.\.txt$"], "a\u{6587}.txt");
 
     // Byte mode would need three dots here; Unicode mode must not match.
-    te.assert_output(&["-P", r"^a...\.txt$"], "");
+    te.assert_output(&["--pcre2", r"^a...\.txt$"], "");
 
     // PCRE2_UCP: \w covers non-ASCII letters, as it does in the default engine.
     te.assert_output(&[r"^\w\w\.txt$"], "a\u{6587}.txt");
-    te.assert_output(&["-P", r"^\w\w\.txt$"], "a\u{6587}.txt");
+    te.assert_output(&["--pcre2", r"^\w\w\.txt$"], "a\u{6587}.txt");
 }
 
 /// --pcre2 conflicts with the options that bypass the regex engine.
@@ -796,10 +794,10 @@ fn test_pcre2_matches_codepoints_not_bytes() {
 fn test_pcre2_conflicts() {
     let te = TestEnv::new(DEFAULT_DIRS, DEFAULT_FILES);
 
-    te.assert_failure(&["-P", "--glob", "*.foo"]);
-    te.assert_failure(&["-P", "--fixed-strings", "a.foo"]);
-    te.assert_failure(&["-P", "--exact", "a.foo"]);
-    te.assert_failure(&["-P", "--bash", "${} == *.foo"]);
+    te.assert_failure(&["--pcre2", "--glob", "*.foo"]);
+    te.assert_failure(&["--pcre2", "--fixed-strings", "a.foo"]);
+    te.assert_failure(&["--pcre2", "--exact", "a.foo"]);
+    te.assert_failure(&["--pcre2", "--bash", "${} == *.foo"]);
 }
 
 /// Builds without the 'pcre2' feature reject --pcre2 rather than ignoring it.
@@ -808,7 +806,7 @@ fn test_pcre2_conflicts() {
 fn test_pcre2_unavailable() {
     let te = TestEnv::new(DEFAULT_DIRS, DEFAULT_FILES);
 
-    te.assert_failure(&["-P", "foo"]);
+    te.assert_failure(&["--pcre2", "foo"]);
 }
 
 /// Full path search (--full-path)
@@ -3466,15 +3464,15 @@ fn test_pcre2_invalid_utf8() {
     .unwrap();
 
     // No error, and the valid runs on either side of the bad byte still match.
-    te.assert_output(&["-P", "", "test1/"], "test1/test_�invalid.txt");
-    te.assert_output(&["-P", "invalid", "test1/"], "test1/test_�invalid.txt");
-    te.assert_output(&["-P", "^test_", "test1/"], "test1/test_�invalid.txt");
+    te.assert_output(&["--pcre2", "", "test1/"], "test1/test_�invalid.txt");
+    te.assert_output(&["--pcre2", "invalid", "test1/"], "test1/test_�invalid.txt");
+    te.assert_output(&["--pcre2", "^test_", "test1/"], "test1/test_�invalid.txt");
 
     // The 0xFE byte itself is unmatchable: nothing matches it, and no pattern
     // can span it. PCRE2 has no equivalent of the default engine's '(?-u)'.
-    te.assert_output(&["-P", r"test_\xFEinvalid"], "");
-    te.assert_output(&["-P", r"^test_.invalid\.txt$"], "");
-    te.assert_output(&["-P", r"^test_.*\.txt$"], "");
+    te.assert_output(&["--pcre2", r"test_\xFEinvalid"], "");
+    te.assert_output(&["--pcre2", r"^test_.invalid\.txt$"], "");
+    te.assert_output(&["--pcre2", r"^test_.*\.txt$"], "");
 }
 
 /// Filtering for file size (--size)
@@ -4145,7 +4143,7 @@ fn test_opposing(flag: &str, opposing_flags: &[&str]) {
     );
 }
 
-/// --no-full-path restores filename-only matching after a --full-path
+/// -P/--no-full-path restores filename-only matching after a --full-path
 /// (e.g. one baked into a shell alias). Uses an anchored pattern because
 /// the generic opposing-flags test's '.' pattern matches either way.
 #[test]
@@ -4156,6 +4154,7 @@ fn test_no_full_path_overrides_full_path() {
     // so a filename-anchored pattern finds nothing.
     te.assert_output(&["--full-path", "^a\\.foo$"], "");
     te.assert_output(&["--full-path", "--no-full-path", "^a\\.foo$"], "a.foo");
+    te.assert_output(&["--full-path", "-P", "^a\\.foo$"], "a.foo");
 }
 
 /// Print error if search pattern starts with a dot and --hidden is not set

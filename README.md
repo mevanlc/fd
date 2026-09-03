@@ -115,24 +115,24 @@ interpreted separately for every entry.
 
 ### pcre2
 
-fd's default regex engine has no look-around and no backreferences. `-P`/`--pcre2`
+fd's default regex engine has no look-around and no backreferences. `--pcre2`
 switches to PCRE2, which supports both:
 
 ```console
-$ fd -P '(?<!test_)main\.rs$'
-$ fd -P '(\w+)_\1'
+$ fd --pcre2 '(?<!test_)main\.rs$'
+$ fd --pcre2 '(\w+)_\1'
 ```
 
 PCRE2 runs in Unicode mode, so `.` matches a whole codepoint and `\w`, `\d` and
 `\s` are Unicode-aware, matching the default engine. Filenames that are not
 valid UTF-8 are still searched rather than raising an error, but their
 ill-formed bytes never match and no pattern can match across them — the default
-engine can target those bytes with `(?-u)`, and PCRE2 has no equivalent. `-P`
+engine can target those bytes with `(?-u)`, and PCRE2 has no equivalent. `--pcre2`
 cannot be combined with `--glob`, `--fixed-strings`, `--exact` or `--bash`, all
 of which bypass the regex engine.
 
 Because PCRE2 is a C library, it is behind a non-default cargo feature — builds
-without it reject `-P` rather than ignoring it:
+without it reject `--pcre2` rather than ignoring it:
 
 ```console
 $ cargo build --release --features pcre2
@@ -203,18 +203,19 @@ to number.
 `ls` or `gls`. It works with an empty `PATH`, formats timestamps like `ls`, and
 can be combined with `--absolute-path` and `--sort`.
 
-`--no-full-path` can undo an earlier `-p/--full-path`, which is useful when the
-fork is wrapped in a search-everything alias:
+`-P`/`--no-full-path` can undo an earlier `-p`/`--full-path`, which is
+useful when the fork is wrapped in a search-everything alias:
 
 ```sh
 alias f='fd -H -I -i -p -M vcs_meta,package,os_meta'
 ```
 
 The alias can then be adjusted per invocation with flags such as
-`--no-full-path`, `--no-hidden`, `--ignore`, `-M package-` or `-M-`.
+`-P`/`--no-full-path`, `--no-hidden`, `--ignore`, `-M package-` or `-M-`.
 As a convenience, a separator-free `--exact` pattern always matches against the
-filename, so `f --exact Cargo.toml` does not need an explicit `--no-full-path`.
-An exact pattern containing a path separator retains full-path matching.
+filename, so `f --exact Cargo.toml` does not need an explicit
+`-P`/`--no-full-path`. An exact pattern containing a path separator retains
+full-path matching.
 
 Options with compact value grammars accept the literal value `help` for a
 focused syntax reference:

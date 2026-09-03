@@ -100,7 +100,7 @@ codegen-units = 1
 [features]
 use-jemalloc = ["tikv-jemallocator"]
 completions = ["clap_complete"]
-# Opt-in PCRE2 engine for -P/--pcre2. Not enabled by default: pcre2-sys links a
+# Opt-in PCRE2 engine for --pcre2. Not enabled by default: pcre2-sys links a
 # system libpcre2-8 or builds a vendored copy with a C compiler, and fd's
 # release builds are cross-compiled and stay pure Rust.
 pcre2 = ["dep:pcre2"]

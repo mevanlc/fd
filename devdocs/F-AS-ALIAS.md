@@ -46,7 +46,7 @@ The boolean flags pair with clap-level overrides:
 | `-i` | `-s` (case-sensitive) or `--case-sensitive` |
 | `-H` | `--no-hidden` |
 | `-I` | `--ignore` (respect ignore files again) |
-| `-p` | `--no-full-path` (match basenames only again) |
+| `-p` | `-P` or `--no-full-path` (match basenames only again) |
 
 The matchset selection folds left to right across all `-m`/`-M`
 occurrences, so a later value edits the alias's list:
@@ -76,7 +76,7 @@ native spellings:
 |---|---|
 | `-O` (hide dotfiles) | `--no-hidden` |
 | `-G` (respect ignores) | `--ignore` |
-| `-n` (basenames only) | `--no-full-path` |
+| `-n` (basenames only) | `-P` / `--no-full-path` |
 | `-C` | `-s` |
 | `-V` (show VCS metadata) | `-M vcs_meta-` |
 | `-M` (show package dirs) | `-M package-,os_meta-` |

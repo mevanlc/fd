@@ -194,7 +194,6 @@ pub struct Opts {
     /// the option.
     #[arg(
         long,
-        short = 'P',
         conflicts_with_all(&["glob", "fixed_strings", "exact", "bash"]),
         help = "Use the PCRE2 regex engine (look-around, backreferences)",
         long_help
@@ -329,7 +328,13 @@ pub struct Opts {
     pub full_path: bool,
 
     /// Overrides --full-path
-    #[arg(long, overrides_with = "full_path", hide = true, action = ArgAction::SetTrue)]
+    #[arg(
+        long,
+        short = 'P',
+        overrides_with = "full_path",
+        hide = true,
+        action = ArgAction::SetTrue
+    )]
     no_full_path: (),
 
     /// Separate search results by the null character (instead of newlines).

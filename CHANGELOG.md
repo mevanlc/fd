@@ -19,7 +19,7 @@
 - Many options with a compact value syntax (`-t`, `-S`, `-R`/`--sort`, `--changed-within`,
   `--changed-before`, `--summarize`, `-x`, `-X`, `--bash`, `--prune-if`, `--exclude-if`)
   now accept the literal value `help` to print a cheat sheet for that option's syntax.
-- Add `--no-full-path` to override `-p`/`--full-path`, e.g. one baked into a shell alias.
+- Add `-P`/`--no-full-path` to override `-p`/`--full-path`, e.g. one baked into a shell alias.
 - Add the `{#}` placeholder for `-X`/`--exec-batch`, which expands to the 1-based job number
   of the process the command runs in. Job numbers are unique across every process one run
   spawns, including across repeated `-X` options, which makes them usable for per-batch output
