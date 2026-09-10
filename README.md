@@ -201,7 +201,9 @@ to number.
 
 `-l/--list-details` is implemented entirely inside fd instead of invoking
 `ls` or `gls`. It works with an empty `PATH`, formats timestamps like `ls`, and
-can be combined with `--absolute-path` and `--sort`.
+can be combined with `--absolute-path` and `--sort`. Using `-x/--exec` or
+`-X/--exec-batch` silently disables long listing, so `fd -emd -l -x file`
+runs `file` on each Markdown match and `fd -emd -l -X file` runs it in batches.
 
 `-P`/`--no-full-path` can undo an earlier `-p`/`--full-path`, which is
 useful when the fork is wrapped in a search-everything alias:

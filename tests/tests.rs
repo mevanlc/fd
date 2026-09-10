@@ -4033,6 +4033,29 @@ fn test_list_details() {
     te.assert_failure(&["--sort", "m", "--exec", "echo"]);
 }
 
+#[test]
+fn test_list_details_with_exec() {
+    let te = TestEnv::new(&[], &["a.md", "b.md", "c.txt"]).normalize_line(true);
+
+    for (exec, expected) in [
+        ("-x", "matched a.md\nmatched b.md"),
+        ("--exec", "matched a.md\nmatched b.md"),
+        ("-X", "matched a.md b.md"),
+        ("--exec-batch", "matched a.md b.md"),
+    ] {
+        for listing in ["-l", "--list-details"] {
+            for args in [
+                vec!["-emd", listing, exec, "echo", "matched", "{/}"],
+                vec!["-emd", exec, "echo", "matched", "{/}", ";", listing],
+            ] {
+                te.assert_output(&args, expected);
+                let output = te.assert_success_and_get_output(".", &args);
+                assert!(output.stderr.is_empty(), "unexpected warning: {output:?}");
+            }
+        }
+    }
+}
+
 /// '--list-details' can be combined with '--absolute-path', in which case the
 /// long listing shows absolute paths.
 #[test]

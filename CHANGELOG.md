@@ -1,6 +1,8 @@
 # Unreleased
 
 ## Features
+- Allow `-x/--exec` and `-X/--exec-batch` with `-l/--list-details`, silently
+  disabling long listing when a command is given.
 - Add `--ignore-parent` option to override `--no-ignore-parent`, see #1958 (@tmchow)
 - Add `--exact` option to match the entire filename exactly (literal, non-substring).
   Separator-free exact patterns use filename matching even with `--full-path`, which

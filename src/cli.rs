@@ -33,7 +33,7 @@ use crate::value_help::{self, OrHelp};
                        Bugs can be reported on GitHub: https://github.com/sharkdp/fd/issues",
     max_term_width = 98,
     args_override_self = true,
-    group(ArgGroup::new("execs").args(&["exec", "exec_batch", "list_details"]).conflicts_with_all(&[
+    group(ArgGroup::new("execs").args(&["exec", "exec_batch", "list_details"]).multiple(true).conflicts_with_all(&[
             "max_results", "quiet", "max_one_result"])),
 )]
 pub struct Opts {
@@ -269,6 +269,8 @@ pub struct Opts {
     relative_path: (),
 
     /// Use a long listing format with metadata, similar to 'ls -l'.
+    ///
+    /// Silently disabled when -x/--exec or -X/--exec-batch is used.
     ///
     /// To use the system 'ls' instead, see -x and -X.
     #[arg(
@@ -1102,7 +1104,6 @@ impl clap::Args for Exec {
                 .allow_hyphen_values(true)
                 .value_terminator(";")
                 .value_name("cmd")
-                .conflicts_with("list_details")
                 .help("Execute a command for each search result")
                 .long_help(
                     "Execute a command for each search result in parallel (use --threads=1 for sequential command execution). \
@@ -1140,7 +1141,7 @@ impl clap::Args for Exec {
                 .allow_hyphen_values(true)
                 .value_terminator(";")
                 .value_name("cmd")
-                .conflicts_with_all(["exec", "list_details"])
+                .conflicts_with("exec")
                 .help("Execute a command with all search results at once")
                 .long_help(
                     "Execute the given command once, with all search results as arguments.\n\

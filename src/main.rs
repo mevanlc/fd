@@ -418,7 +418,8 @@ fn construct_config(
         HyperlinkWhen::Auto => colored_output,
     };
     let command = extract_command(&mut opts);
-    let has_command = command.is_some() || opts.list_details;
+    let list_details = opts.list_details && command.is_none();
+    let has_command = command.is_some() || list_details;
     let sort = opts.sort.as_ref().map(|expr| expr.0.clone());
 
     let full_path_base = if opts.uses_full_path_matching() {
@@ -460,7 +461,7 @@ fn construct_config(
         ls_colors,
         hyperlink,
         interactive_terminal,
-        list_details: opts.list_details,
+        list_details,
         file_types: opts.filetype.as_ref().map(|values| {
             use crate::cli::FileType::*;
             let mut file_types = FileTypes::default();
