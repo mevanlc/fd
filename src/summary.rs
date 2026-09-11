@@ -6,9 +6,9 @@ use anyhow::anyhow;
 
 use crate::dir_entry::DirEntry;
 
-/// A summary to produce instead of the regular search results (`--summarize`).
+/// A summary to produce instead of the regular search results (`--summary`).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SummarizeSpec {
+pub enum SummarySpec {
     /// Summarize the file extensions of the search results (`fext`).
     FileExtensions(FextOptions),
 }
@@ -42,7 +42,7 @@ impl Setting {
     }
 }
 
-impl FromStr for SummarizeSpec {
+impl FromStr for SummarySpec {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -52,7 +52,7 @@ impl FromStr for SummarizeSpec {
         };
 
         match name {
-            "fext" => Ok(SummarizeSpec::FileExtensions(parse_fext_options(options)?)),
+            "fext" => Ok(SummarySpec::FileExtensions(parse_fext_options(options)?)),
             _ => Err(anyhow!("unknown summary type '{name}' (expected 'fext')")),
         }
     }
@@ -98,12 +98,12 @@ const NO_EXTENSION: &str = "(none)";
 
 /// Accumulates search results and renders the requested summary.
 pub struct Summarizer {
-    spec: SummarizeSpec,
+    spec: SummarySpec,
     counts: HashMap<String, u64>,
 }
 
 impl Summarizer {
-    pub fn new(spec: &SummarizeSpec) -> Self {
+    pub fn new(spec: &SummarySpec) -> Self {
         Self {
             spec: spec.clone(),
             counts: HashMap::new(),
@@ -111,7 +111,7 @@ impl Summarizer {
     }
 
     pub fn record(&mut self, entry: &DirEntry) {
-        let SummarizeSpec::FileExtensions(options) = &self.spec;
+        let SummarySpec::FileExtensions(options) = &self.spec;
 
         let path = entry.path();
         let name = path
@@ -142,7 +142,7 @@ impl Summarizer {
     }
 
     pub fn write(&self, stdout: &mut impl Write) -> io::Result<()> {
-        let SummarizeSpec::FileExtensions(options) = &self.spec;
+        let SummarySpec::FileExtensions(options) = &self.spec;
 
         let mut entries: Vec<_> = self.counts.iter().collect();
         entries.sort_by(|(ext_a, count_a), (ext_b, count_b)| {
@@ -177,7 +177,7 @@ mod tests {
 
     fn fext_options(spec: &str) -> FextOptions {
         match spec.parse().unwrap() {
-            SummarizeSpec::FileExtensions(options) => options,
+            SummarySpec::FileExtensions(options) => options,
         }
     }
 
@@ -216,10 +216,10 @@ mod tests {
 
     #[test]
     fn parse_errors() {
-        assert!("bogus".parse::<SummarizeSpec>().is_err());
-        assert!("fext:x".parse::<SummarizeSpec>().is_err());
-        assert!("fext:-x".parse::<SummarizeSpec>().is_err());
-        assert!("fext:i-".parse::<SummarizeSpec>().is_err());
-        assert!("fext:@".parse::<SummarizeSpec>().is_err());
+        assert!("bogus".parse::<SummarySpec>().is_err());
+        assert!("fext:x".parse::<SummarySpec>().is_err());
+        assert!("fext:-x".parse::<SummarySpec>().is_err());
+        assert!("fext:i-".parse::<SummarySpec>().is_err());
+        assert!("fext:@".parse::<SummarySpec>().is_err());
     }
 }

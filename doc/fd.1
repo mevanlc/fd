@@ -44,7 +44,7 @@ Options may be given anywhere on the command line.
 Several options with a compact value syntax accept the literal value 'help' to
 print a cheat sheet for that option's syntax, e.g. 'fd \-S help'. These are:
 \&'\-t', '\-S', '\-R/\-\-sort', '\-\-changed\-within', '\-\-changed\-before',
-\&'\-\-summarize', '\-x', '\-X', '\-\-bash', '\-\-prune\-if', and '\-\-exclude\-if'.
+\&'\-\-summary', '\-x', '\-X', '\-\-bash', '\-\-prune\-if', and '\-\-exclude\-if'.
 .SH OPTIONS
 .TP
 .B \-H, \-\-hidden
@@ -535,7 +535,7 @@ Notice that you can use "{{" and "}}" to escape "{" and "}" respectively, which 
 useful if you need to include the literal text of one of the above placeholders.
 .RE
 .TP
-.BI "\-\-summarize " summary\-spec
+.BI "\-\-summary " summary\-spec
 Instead of printing the search results, print a summary of them.
 
 The \fIsummary-spec\fR has the form '\fIsummary\fR[:\fIoptions\fR]'. The only summary currently
@@ -554,7 +554,7 @@ include dotfiles (default: enabled)
 .IP s
 sort by ascending count (default); '\-s' sorts by descending count
 .P
-Examples: '\-\-summarize fext', '\-\-summarize fext:@d\-i\-s'
+Examples: '\-\-summary fext', '\-\-summary fext:@d\-i\-s'
 .RE
 .TP
 .BI "\-x, \-\-exec " command

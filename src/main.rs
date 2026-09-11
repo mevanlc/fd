@@ -15,7 +15,7 @@ mod output;
 mod pattern;
 mod regex_helper;
 mod sanitize;
-mod summarize;
+mod summary;
 mod value_help;
 mod walk;
 
@@ -517,7 +517,7 @@ fn construct_config(
                 }
             })
             .transpose()?,
-        summarize: opts.summarize.take(),
+        summary: opts.summary.take(),
         command: command.map(Arc::new),
         batch_size: opts.batch_size,
         exclude_patterns: opts.exclude.iter().map(|p| String::from("!") + p).collect(),

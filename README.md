@@ -164,12 +164,12 @@ Sorting buffers the result set until traversal finishes.
 
 ### file-extension summaries
 
-`--summarize fext` prints counts grouped by file extension instead of printing
+`--summary fext` prints counts grouped by file extension instead of printing
 the matching paths:
 
 ```console
-$ fd --summarize fext
-$ fd -tf --summarize fext:@d-i-s
+$ fd --summary fext
+$ fd -tf --summary fext:@d-i-s
 ```
 
 The option letters after `:` are `i` for case-folded extensions, `d` for
@@ -229,7 +229,7 @@ $ fd --bash help
 ```
 
 This works with `-t`, `-S`, `-R`, `-x`, `-X`, `--changed-within`,
-`--changed-before`, `--summarize`, `--bash`, `--prune-if` and `--exclude-if`.
+`--changed-before`, `--summary`, `--bash`, `--prune-if` and `--exclude-if`.
 
 Multiline diagnostics preserve their intended line breaks while unsafe control
 characters remain escaped.

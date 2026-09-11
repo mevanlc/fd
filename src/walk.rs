@@ -24,7 +24,7 @@ use crate::exit_codes::{ExitCode, merge_exitcodes};
 use crate::filesystem;
 use crate::output;
 use crate::pattern::Pattern;
-use crate::summarize::Summarizer;
+use crate::summary::Summarizer;
 
 /// The receiver thread can either be buffering results or directly streaming to the console.
 #[derive(PartialEq)]
@@ -149,7 +149,7 @@ struct ReceiverBuffer<'a, W> {
     buffer: Vec<DirEntry>,
     /// Result count.
     num_results: usize,
-    /// Summary accumulator, if `--summarize` was supplied. When set, results are
+    /// Summary accumulator, if `--summary` was supplied. When set, results are
     /// counted instead of printed, and the summary is printed at the end.
     summarizer: Option<Summarizer>,
 }
@@ -173,7 +173,7 @@ impl<'a, W: Write> ReceiverBuffer<'a, W> {
             deadline,
             buffer: Vec::with_capacity(MAX_BUFFER_LENGTH),
             num_results: 0,
-            summarizer: config.summarize.as_ref().map(Summarizer::new),
+            summarizer: config.summary.as_ref().map(Summarizer::new),
         }
     }
 

@@ -19,7 +19,7 @@
   name from the selection, a bare `-` (or `--clear-include-matchsets`/`--clear-exclude-matchsets`)
   clears it. Useful for undoing a selection baked into a shell alias.
 - Many options with a compact value syntax (`-t`, `-S`, `-R`/`--sort`, `--changed-within`,
-  `--changed-before`, `--summarize`, `-x`, `-X`, `--bash`, `--prune-if`, `--exclude-if`)
+  `--changed-before`, `--summary`, `-x`, `-X`, `--bash`, `--prune-if`, `--exclude-if`)
   now accept the literal value `help` to print a cheat sheet for that option's syntax.
 - Add `-P`/`--no-full-path` to override `-p`/`--full-path`, e.g. one baked into a shell alias.
 - Add the `{#}` placeholder for `-X`/`--exec-batch`, which expands to the 1-based job number
