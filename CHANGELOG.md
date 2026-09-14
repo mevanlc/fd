@@ -1,6 +1,12 @@
 # Unreleased
 
 ## Features
+- Add `--summary count-children` and `--summary count-descendants`, counting all
+  entries in matched directories and parents of other matches independently of
+  selection filters. Reuse directory scans, support normal path output and metadata
+  sorting, and omit incomplete counts with diagnostics and a nonzero exit status.
+- Remove headers from summary reports, including the heading and underline in
+  `--summary fext`.
 - Allow `-x/--exec` and `-X/--exec-batch` with `-l/--list-details`, silently
   disabling long listing when a command is given.
 - Add `--ignore-parent` option to override `--no-ignore-parent`, see #1958 (@tmchow)

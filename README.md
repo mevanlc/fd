@@ -12,7 +12,7 @@ This fork regularly merges upstream `master` and adds a few larger features:
 - native evaluation of bash conditional expressions while searching;
 - an opt-in PCRE2 regex engine with look-around and backreferences;
 - multi-key sorting by file metadata;
-- aggregate file-extension summaries; and
+- file-extension summaries and directory entry counts; and
 - an internal long-listing implementation that composes with the other output
   features.
 
@@ -162,7 +162,9 @@ $ fd -R pZ         # full path with natural-number collation
 
 Sorting buffers the result set until traversal finishes.
 
-### file-extension summaries
+### summaries
+
+All summary reports have no header or footer.
 
 `--summary fext` prints counts grouped by file extension instead of printing
 the matching paths:
@@ -176,6 +178,45 @@ The option letters after `:` are `i` for case-folded extensions, `d` for
 including dotfiles and `s` for ascending count. Prefix a letter with `-` to
 disable it or `@` to use the platform default. Dotfiles and ascending counts
 are enabled by default; case folding defaults on for macOS and Windows.
+
+`--summary count-children` counts all immediate filesystem entries in each
+selected directory. `--summary count-descendants` gives the recursive total,
+including descendant directories. Both print `<count>\t<directory>` rows with
+an unpadded count and a literal tab:
+
+```console
+$ fd -td --summary count-children
+$ fd -e rs --summary count-descendants
+```
+
+Matched directories select themselves; every other matched entry selects its
+parent. A parent does not have to match the search criteria. Repeated directory
+paths produce one row, while distinct symlink paths remain separate. Counts
+include hidden, ignored, excluded, and special entries; neither `.` nor `..`
+nor the reported directory itself is counted. Empty directories report zero.
+
+Patterns, types, sizes, times, matchsets, ignores, pruning, and depth limits
+select report directories but never filter their counted contents. `-1` and
+`--max-results` limit matched entries before directory deduplication; the
+directories selected still receive complete counts.
+
+`-L` follows directory links during both selection and recursive counting.
+Without it, matched links select their parents. `--one-file-system` limits
+counting descent relative to each reported directory's filesystem. Mount
+boundaries, dangling links, and ancestor-loop links count as entries without
+descent. Thus these flags can change recursive totals, but do not change an
+immediate-child count for a fixed directory. Hard links and distinct symlink
+routes each contribute their entries, even when underlying scans are cached.
+
+Directory rows sort by ascending count, then path. `-R/--sort` overrides that
+order using directory metadata. The directory summaries support normal path
+output controls, including color, hyperlinks, absolute paths, separators, and
+`-0` for NUL-terminated records. They accept no summary-specific options.
+Unreadable or otherwise incomplete counts are omitted, with diagnostics on
+stderr and a nonzero exit status; complete rows are still printed.
+
+All summary modes conflict with `-x`, `-X`, `-l`, `--format`, and
+`--quiet`/`--has-results`.
 
 ### job numbers for `-X`
 

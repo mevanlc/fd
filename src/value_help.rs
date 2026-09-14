@@ -97,8 +97,21 @@ Summary specs (for --summary): '<summary>[:<options>]'.
   fext   count how many results share each file extension; a dotfile's
          whole name counts as its extension, and entries without an
          extension are counted under '(none)'
+  count-children      count all immediate entries in each selected directory
+  count-descendants   count all descendants of each selected directory
 
-Options are single letters; prefix with '-' to disable an option or
+Directory summaries select matched directories and parents of other matches,
+deduplicating paths but preserving symlink aliases. Filters, ignores, pruning,
+depth and result limits affect selection only, never the contents counted.
+Neither '.' nor '..' is counted. -L follows directory links; --one-file-system
+limits descent relative to each report directory. Boundary and ancestor-loop
+entries count once, without descent. Dangling links count once.
+Rows are '<count>\\t<directory>', sorted by count ascending then path; -R overrides
+this with directory metadata sorting. Path output controls and -0 are supported.
+Incomplete rows are omitted with stderr diagnostics and a nonzero exit status.
+All summaries have no header or footer. Conflicts: -x, -X, -l, --format, --quiet.
+
+fext options are single letters; prefix with '-' to disable an option or
 '@' to restore its default. The last occurrence wins.
   i   fold case variations of an extension together
       (default: enabled on macOS and Windows, disabled elsewhere)

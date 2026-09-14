@@ -1,3 +1,4 @@
+mod summary;
 mod testenv;
 
 #[cfg(unix)]
@@ -2381,9 +2382,7 @@ fn test_summary_fext() {
     assert_exact_output(
         &te,
         &["--summary", "fext:i"],
-        "File Extensions Summary
------------------------
-1 txt
+        "1 txt
 2 (none)
 2 pdf
 3 png
@@ -2394,9 +2393,7 @@ fn test_summary_fext() {
     assert_exact_output(
         &te,
         &["--hidden", "--summary", "fext:i"],
-        "File Extensions Summary
------------------------
-1 .fdignore
+        "1 .fdignore
 1 .git
 1 .gitignore
 1 txt
@@ -2410,9 +2407,7 @@ fn test_summary_fext() {
     assert_exact_output(
         &te,
         &["--hidden", "--summary", "fext:i-d"],
-        "File Extensions Summary
------------------------
-1 txt
+        "1 txt
 2 (none)
 2 pdf
 3 png
@@ -2423,9 +2418,7 @@ fn test_summary_fext() {
     assert_exact_output(
         &te,
         &["--summary", "fext:-i"],
-        "File Extensions Summary
------------------------
-1 PNG
+        "1 PNG
 1 txt
 2 (none)
 2 pdf
@@ -2437,9 +2430,7 @@ fn test_summary_fext() {
     assert_exact_output(
         &te,
         &["--summary", "fext:i-s"],
-        "File Extensions Summary
------------------------
-3 png
+        "3 png
 2 (none)
 2 pdf
 1 txt
@@ -2460,9 +2451,7 @@ fn test_summary_fext_alignment() {
     assert_exact_output(
         &te,
         &["--summary", "fext"],
-        "File Extensions Summary
------------------------
- 1 (none)
+        " 1 (none)
  1 b
 10 a
 ",

@@ -12,6 +12,7 @@ use crate::filesystem::strip_current_dir;
 enum DirEntryInner {
     Normal(ignore::DirEntry),
     BrokenSymlink(PathBuf),
+    Directory(PathBuf),
 }
 
 #[derive(Debug)]
@@ -22,6 +23,19 @@ pub struct DirEntry {
 }
 
 impl DirEntry {
+    /// A report directory, including parents introduced by non-directory matches.
+    pub fn directory(path: PathBuf) -> std::io::Result<Self> {
+        let metadata = path.metadata()?;
+        if !metadata.is_dir() {
+            return Err(std::io::Error::other("no longer a directory"));
+        }
+        Ok(Self {
+            inner: DirEntryInner::Directory(path),
+            metadata: OnceCell::from(Some(metadata)),
+            style: OnceCell::new(),
+        })
+    }
+
     #[inline]
     pub fn normal(e: ignore::DirEntry) -> Self {
         Self {
@@ -42,14 +56,16 @@ impl DirEntry {
     pub fn path(&self) -> &Path {
         match &self.inner {
             DirEntryInner::Normal(e) => e.path(),
-            DirEntryInner::BrokenSymlink(pathbuf) => pathbuf.as_path(),
+            DirEntryInner::BrokenSymlink(pathbuf) | DirEntryInner::Directory(pathbuf) => {
+                pathbuf.as_path()
+            }
         }
     }
 
     pub fn into_path(self) -> PathBuf {
         match self.inner {
             DirEntryInner::Normal(e) => e.into_path(),
-            DirEntryInner::BrokenSymlink(p) => p,
+            DirEntryInner::BrokenSymlink(p) | DirEntryInner::Directory(p) => p,
         }
     }
 
@@ -60,7 +76,9 @@ impl DirEntry {
         let path = self.path();
         if config.strip_cwd_prefix {
             let stripped = strip_current_dir(path);
-            if starts_with_dash(stripped) {
+            if stripped.as_os_str().is_empty() {
+                Path::new(".")
+            } else if starts_with_dash(stripped) {
                 path
             } else {
                 stripped
@@ -82,7 +100,9 @@ impl DirEntry {
     pub fn file_type(&self) -> Option<FileType> {
         match &self.inner {
             DirEntryInner::Normal(e) => e.file_type(),
-            DirEntryInner::BrokenSymlink(_) => self.metadata().map(|m| m.file_type()),
+            DirEntryInner::BrokenSymlink(_) | DirEntryInner::Directory(_) => {
+                self.metadata().map(|m| m.file_type())
+            }
         }
     }
 
@@ -91,6 +111,7 @@ impl DirEntry {
             .get_or_init(|| match &self.inner {
                 DirEntryInner::Normal(e) => e.metadata().ok(),
                 DirEntryInner::BrokenSymlink(path) => path.symlink_metadata().ok(),
+                DirEntryInner::Directory(path) => path.metadata().ok(),
             })
             .as_ref()
     }
@@ -98,7 +119,7 @@ impl DirEntry {
     pub fn depth(&self) -> Option<usize> {
         match &self.inner {
             DirEntryInner::Normal(e) => Some(e.depth()),
-            DirEntryInner::BrokenSymlink(_) => None,
+            DirEntryInner::BrokenSymlink(_) | DirEntryInner::Directory(_) => None,
         }
     }
 
@@ -144,7 +165,7 @@ impl Colorable for DirEntry {
     fn file_name(&self) -> OsString {
         let name = match &self.inner {
             DirEntryInner::Normal(e) => e.file_name(),
-            DirEntryInner::BrokenSymlink(path) => {
+            DirEntryInner::BrokenSymlink(path) | DirEntryInner::Directory(path) => {
                 // Path::file_name() only works if the last component is Normal,
                 // but we want it for all component types, so we open code it.
                 // Copied from LsColors::style_for_path_with_metadata().

@@ -665,12 +665,25 @@ pub struct Opts {
 
     /// Instead of printing the search results, print a summary of them.
     ///
-    /// The summary-spec has the form '<summary>[:<options>]'. The only summary currently
-    /// available is 'fext', which counts how many search results share each file extension.
+    /// The summary-spec has the form '<summary>[:<options>]'. 'fext' counts how many
+    /// search results share each file extension.
     /// For dotfiles (names starting with '.'), the entire filename is treated as the
     /// extension; entries without an extension are counted under '(none)'.
     ///
-    /// The options are single letters, each of which may be prefixed with '-' to disable it
+    /// 'count-children' counts all immediate entries in each selected directory;
+    /// 'count-descendants' counts all descendants. Matched directories select themselves;
+    /// other matched entries select their parents. Directory paths are deduplicated.
+    /// Filters, ignore rules, pruning, depth and result limits select report directories
+    /// but do not filter their contents when counting. Neither '.' nor '..' is counted.
+    /// -L follows directory links; --one-file-system limits descent relative to each
+    /// reported directory. Boundary and ancestor-loop entries count once without descent.
+    ///
+    /// Directory summaries print '<count>\t<directory>', sorted by ascending count
+    /// then path unless -R is supplied. Path output controls and -0 are supported.
+    /// Incomplete counts are omitted with stderr diagnostics and a nonzero exit status.
+    /// All summaries have no header or footer.
+    ///
+    /// The fext options are single letters, each of which may be prefixed with '-' to disable it
     /// or '@' to use its default. If an option is repeated, the last occurrence wins.
     /// {n}    i    treat case variations of an extension as the same extension
     /// {n}         (default: enabled on macOS and Windows, disabled elsewhere)

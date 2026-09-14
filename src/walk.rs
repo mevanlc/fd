@@ -298,14 +298,18 @@ impl<'a, W: Write> ReceiverBuffer<'a, W> {
     /// Stop looping.
     fn stop(&mut self) -> Result<(), ExitCode> {
         if let Some(summarizer) = self.summarizer.take() {
-            if let Err(e) = summarizer.write(&mut self.stdout)
-                && e.kind() != ::std::io::ErrorKind::BrokenPipe
+            self.quit_flag.store(true, AtomicOrdering::Relaxed);
+            let status = match summarizer.write(&mut self.stdout, self.config, self.interrupt_flag)
             {
-                print_error(format!("Could not write to output: {e}"));
-                return Err(ExitCode::GeneralError);
-            }
+                Ok(status) => status,
+                Err(e) if e.kind() == io::ErrorKind::BrokenPipe => return Err(ExitCode::Success),
+                Err(e) => {
+                    print_error(format!("Could not write to output: {e}"));
+                    return Err(ExitCode::GeneralError);
+                }
+            };
             self.flush()?;
-            return Err(ExitCode::Success);
+            return Err(status);
         }
 
         if self.mode == ReceiverMode::Buffering {
@@ -340,7 +344,7 @@ impl<'a, W: Write> ReceiverBuffer<'a, W> {
     }
 }
 
-fn compare_entries(left: &DirEntry, right: &DirEntry, sort: &SortConfig) -> Ordering {
+pub(crate) fn compare_entries(left: &DirEntry, right: &DirEntry, sort: &SortConfig) -> Ordering {
     for criterion in &sort.criteria {
         let ord = compare_entries_by(left, right, criterion.by, sort.text);
         let ord = if criterion.descending {
@@ -992,7 +996,7 @@ impl WorkerState {
         let config = &self.config;
         let walker = self.build_walker(paths)?;
 
-        if config.ls_colors.is_some() && config.is_printing() {
+        if (config.ls_colors.is_some() || config.summary.is_some()) && config.is_printing() {
             let quit_flag = Arc::clone(&self.quit_flag);
             let interrupt_flag = Arc::clone(&self.interrupt_flag);
 
