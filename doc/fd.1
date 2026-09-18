@@ -585,8 +585,11 @@ using directory metadata. Normal path output controls, including colors, hyperli
 absolute paths and path separators, are supported; \-0 terminates each record with NUL.
 These two modes accept no nonempty option suffix.
 .P
-Incomplete counts are omitted, with diagnostics on stderr regardless of \-\-show-errors
-and a nonzero exit status. Complete rows are still printed.
+Missing or unreadable entries do not stop counting: each row reports the total
+that could be counted, with diagnostics on stderr regardless of \-\-show-errors
+and a nonzero exit status if incomplete. Entries already enumerated still count
+even if their metadata or contents cannot be read. A selected directory that
+disappears or cannot be opened reports zero.
 .TP
 .BI "\-x, \-\-exec " command
 .RS

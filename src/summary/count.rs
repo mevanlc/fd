@@ -82,9 +82,17 @@ struct Child {
     identity: Identity,
 }
 
+#[derive(Default)]
 struct Listing {
     count: u64,
     directories: Vec<Child>,
+    errors: Vec<CountError>,
+}
+
+#[derive(Debug, Default)]
+pub(super) struct Count {
+    pub total: u64,
+    pub errors: Vec<CountError>,
 }
 
 trait Reader {
@@ -103,52 +111,76 @@ impl Reader for FsReader {
     }
 
     fn read(&self, path: &Path, interrupt: &AtomicBool) -> Result<Listing> {
-        let read = || -> io::Result<Listing> {
-            let mut listing = Listing {
-                count: 0,
-                directories: Vec::new(),
-            };
-            for entry in fs::read_dir(path)? {
-                if interrupt.load(Ordering::Relaxed) {
-                    return Err(io::Error::from(io::ErrorKind::Interrupted));
-                }
-                let entry = entry?;
-                listing.count = listing
-                    .count
-                    .checked_add(1)
-                    .ok_or_else(|| io::Error::other("entry count exceeds u64"))?;
-                if !self.recursive {
+        match fs::read_dir(path) {
+            Ok(entries) => self.read_entries(path, entries, interrupt),
+            Err(error) => {
+                check_interrupt(interrupt)?;
+                Ok(Listing {
+                    errors: vec![CountError::filesystem(path, error)],
+                    ..Listing::default()
+                })
+            }
+        }
+    }
+}
+
+impl FsReader {
+    fn read_entries(
+        &self,
+        path: &Path,
+        entries: impl IntoIterator<Item = io::Result<fs::DirEntry>>,
+        interrupt: &AtomicBool,
+    ) -> Result<Listing> {
+        let mut listing = Listing::default();
+        for entry in entries {
+            check_interrupt(interrupt)?;
+            let entry = match entry {
+                Ok(entry) => entry,
+                Err(error) => {
+                    listing.errors.push(CountError::filesystem(path, error));
                     continue;
                 }
-                let file_type = entry.file_type()?;
-                let child_path = entry.path();
-                let identity = if file_type.is_dir() {
-                    Some(Identity::read(&child_path)?)
-                } else if file_type.is_symlink() && self.follow {
-                    match child_path.metadata() {
-                        Ok(metadata) if metadata.is_dir() => {
-                            Some(Identity::from_metadata(&child_path, &metadata)?)
-                        }
-                        Ok(_) => None,
-                        // Dangling links and unresolvable link loops still count as entries.
-                        Err(error) if leaf_symlink_error(&error) => None,
-                        Err(error) => return Err(error),
-                    }
-                } else {
-                    None
-                };
-                if let Some(identity) = identity {
+            };
+            // An enumerated entry counts even if it disappears before we can inspect it.
+            listing.count = add(listing.count, 1, path)?;
+            if !self.recursive {
+                continue;
+            }
+            match self.child_identity(&entry) {
+                Ok(Some(identity)) => {
                     listing.directories.push(Child {
                         name: entry.file_name(),
                         identity,
                     });
                 }
+                Ok(None) => {}
+                Err(error) => listing
+                    .errors
+                    .push(CountError::filesystem(&entry.path(), error)),
             }
-            Ok(listing)
-        };
-        let result = read();
+        }
         check_interrupt(interrupt)?;
-        result.map_err(|error| CountError::filesystem(path, error))
+        Ok(listing)
+    }
+
+    fn child_identity(&self, entry: &fs::DirEntry) -> io::Result<Option<Identity>> {
+        let file_type = entry.file_type()?;
+        let path = entry.path();
+        if file_type.is_dir() {
+            Identity::read(&path).map(Some)
+        } else if file_type.is_symlink() && self.follow {
+            match path.metadata() {
+                Ok(metadata) if metadata.is_dir() => {
+                    Identity::from_metadata(&path, &metadata).map(Some)
+                }
+                Ok(_) => Ok(None),
+                // Dangling links and unresolvable link loops still count as entries.
+                Err(error) if leaf_symlink_error(&error) => Ok(None),
+                Err(error) => Err(error),
+            }
+        } else {
+            Ok(None)
+        }
     }
 }
 
@@ -187,7 +219,7 @@ impl<'a> Counter<'a> {
         }
     }
 
-    pub(super) fn count(&mut self, path: &Path) -> Result<u64> {
+    pub(super) fn count(&mut self, path: &Path) -> Result<Count> {
         self.engine.count(path)
     }
 }
@@ -197,7 +229,7 @@ struct Engine<'a, R> {
     recursive: bool,
     one_file_system: bool,
     interrupt: &'a AtomicBool,
-    listings: HashMap<Identity, Result<Arc<Listing>>>,
+    listings: HashMap<Identity, Arc<Listing>>,
     totals: HashMap<(Identity, Option<u64>), u64>,
 }
 
@@ -207,7 +239,7 @@ struct Frame {
     listing: Arc<Listing>,
     next: usize,
     total: u64,
-    contextual: bool,
+    cacheable: bool,
 }
 
 impl<R: Reader> Engine<'_, R> {
@@ -227,33 +259,57 @@ impl<R: Reader> Engine<'_, R> {
         }
     }
 
-    fn frame(&mut self, path: PathBuf, identity: Identity) -> Result<Frame> {
-        let listing = self
-            .listings
-            .entry(identity)
-            .or_insert_with(|| self.reader.read(&path, self.interrupt).map(Arc::new))
-            .clone()?;
+    fn frame(
+        &mut self,
+        path: PathBuf,
+        identity: Identity,
+        errors: &mut Vec<CountError>,
+    ) -> Result<Frame> {
+        let listing = match self.listings.get(&identity) {
+            Some(listing) => Arc::clone(listing),
+            None => {
+                let listing = Arc::new(self.reader.read(&path, self.interrupt)?);
+                // Failed scans can depend on the path used, or recover on a later visit.
+                if listing.errors.is_empty() {
+                    self.listings.insert(identity, Arc::clone(&listing));
+                }
+                listing
+            }
+        };
+        errors.extend(listing.errors.iter().cloned());
         Ok(Frame {
             identity,
             path,
             total: listing.count,
+            cacheable: listing.errors.is_empty(),
             listing,
             next: 0,
-            contextual: false,
         })
     }
 
-    fn count(&mut self, path: &Path) -> Result<u64> {
+    fn count(&mut self, path: &Path) -> Result<Count> {
         check_interrupt(self.interrupt)?;
-        let identity = self.reader.identity(path)?;
+        let identity = match self.reader.identity(path) {
+            Ok(identity) => identity,
+            Err(error @ CountError::Filesystem { .. }) => {
+                return Ok(Count {
+                    errors: vec![error],
+                    ..Count::default()
+                });
+            }
+            Err(error) => return Err(error),
+        };
+        let mut count = Count::default();
         let boundary = self.one_file_system.then_some(identity.device);
         if let Some(&total) = self.totals.get(&(identity, boundary)) {
-            return Ok(total);
+            count.total = total;
+            return Ok(count);
         }
-        let root = self.frame(path.to_path_buf(), identity)?;
+        let root = self.frame(path.to_path_buf(), identity, &mut count.errors)?;
         check_interrupt(self.interrupt)?;
         if !self.recursive {
-            return Ok(root.total);
+            count.total = root.total;
+            return Ok(count);
         }
         let mut ancestors = HashSet::from([identity]);
         let mut stack = vec![root];
@@ -267,30 +323,35 @@ impl<R: Reader> Engine<'_, R> {
                 }
                 if ancestors.contains(&child.identity) {
                     // The link entry is already in listing.count. Its target contributes nothing.
-                    current.contextual = true;
+                    current.cacheable = false;
                     continue;
                 }
                 if let Some(&total) = self.totals.get(&(child.identity, boundary)) {
                     current.total = add(current.total, total, &current.path)?;
                     continue;
                 }
-                let frame = self.frame(current.path.join(&child.name), child.identity)?;
+                let frame = self.frame(
+                    current.path.join(&child.name),
+                    child.identity,
+                    &mut count.errors,
+                )?;
                 ancestors.insert(child.identity);
                 stack.push(frame);
             } else {
                 let complete = stack.pop().unwrap();
                 ancestors.remove(&complete.identity);
-                // Any ancestor cutoff makes the total depend on the route used to reach it.
-                // Such listings can be reused, but their totals must not be cached globally.
-                if !complete.contextual {
+                // Ancestor cutoffs and read errors make totals depend on the route used.
+                // Never cache a partial total as a successful count for another report.
+                if complete.cacheable {
                     self.totals
                         .insert((complete.identity, boundary), complete.total);
                 }
                 if let Some(parent) = stack.last_mut() {
                     parent.total = add(parent.total, complete.total, &parent.path)?;
-                    parent.contextual |= complete.contextual;
+                    parent.cacheable &= complete.cacheable;
                 } else {
-                    return Ok(complete.total);
+                    count.total = complete.total;
+                    return Ok(count);
                 }
             }
         }
@@ -369,7 +430,10 @@ mod tests {
             let id = self.identity(path)?.inode;
             *self.reads.borrow_mut().entry(id).or_default() += 1;
             if self.failures.contains(&id) {
-                return Err(CountError::filesystem(path, "injected read failure"));
+                return Ok(Listing {
+                    errors: vec![CountError::filesystem(path, "injected read failure")],
+                    ..Listing::default()
+                });
             }
             if self.interrupt_on_read {
                 interrupt.store(true, Ordering::Relaxed);
@@ -386,6 +450,7 @@ mod tests {
                         identity: self.id(child),
                     })
                     .collect(),
+                errors: Vec::new(),
             })
         }
     }
@@ -395,9 +460,9 @@ mod tests {
         let reader = FakeReader::new(&[(1, 1, 3, &[2, 2, 3]), (2, 1, 4, &[]), (3, 1, 0, &[])]);
         let interrupt = AtomicBool::new(false);
         let mut engine = Engine::new(reader, true, false, &interrupt);
-        assert_eq!(engine.count(Path::new("1")).unwrap(), 11);
-        assert_eq!(engine.count(Path::new("2-alias")).unwrap(), 4);
-        assert_eq!(engine.count(Path::new("1")).unwrap(), 11);
+        assert_eq!(engine.count(Path::new("1")).unwrap().total, 11);
+        assert_eq!(engine.count(Path::new("2-alias")).unwrap().total, 4);
+        assert_eq!(engine.count(Path::new("1")).unwrap().total, 11);
         assert_eq!(
             *engine.reader.reads.borrow(),
             HashMap::from([(1, 1), (2, 1), (3, 1)])
@@ -412,7 +477,7 @@ mod tests {
             let interrupt = AtomicBool::new(false);
             let mut engine = Engine::new(reader, true, false, &interrupt);
             for (path, total) in order {
-                assert_eq!(engine.count(Path::new(path)).unwrap(), total);
+                assert_eq!(engine.count(Path::new(path)).unwrap().total, total);
             }
             assert_eq!(
                 *engine.reader.reads.borrow(),
@@ -430,14 +495,14 @@ mod tests {
                 let reader = FakeReader::new(&[(1, 1, 2, &[2]), (2, 2, 5, &[3]), (3, 1, 7, &[])]);
                 let mut engine = Engine::new(reader, recursive, limited, &interrupt);
                 assert_eq!(
-                    engine.count(Path::new("1")).unwrap(),
+                    engine.count(Path::new("1")).unwrap().total,
                     if recursive && !limited { 14 } else { 2 }
                 );
                 if limited {
                     assert!(!engine.reader.reads.borrow().contains_key(&2));
                 }
                 assert_eq!(
-                    engine.count(Path::new("2")).unwrap(),
+                    engine.count(Path::new("2")).unwrap().total,
                     if recursive && !limited { 12 } else { 5 }
                 );
             }
@@ -445,16 +510,113 @@ mod tests {
     }
 
     #[test]
-    fn read_failures_propagate_but_do_not_poison_complete_rows() {
-        let reader = FakeReader::new(&[(1, 1, 2, &[2, 3]), (2, 1, 1, &[]), (3, 1, 8, &[])]);
+    fn read_failures_preserve_siblings_and_do_not_cache_partial_totals() {
+        let reader = FakeReader::new(&[
+            (1, 1, 3, &[2, 3, 4]),
+            (2, 1, 1, &[]),
+            (3, 1, 8, &[]),
+            (4, 1, 2, &[]),
+        ]);
         let interrupt = AtomicBool::new(false);
         let mut engine = Engine::new(reader, true, false, &interrupt);
-        engine.reader.failures.insert(2);
-        assert!(engine.count(Path::new("1")).is_err());
-        assert!(engine.count(Path::new("2")).is_err());
-        assert_eq!(engine.count(Path::new("3")).unwrap(), 8);
-        assert_eq!(engine.reader.reads.borrow()[&2], 1);
+        engine.reader.failures.extend([2, 4]);
+        for path in ["1", "1-alias"] {
+            let count = engine.count(Path::new(path)).unwrap();
+            assert_eq!(count.total, 11);
+            assert_eq!(count.errors.len(), 2);
+            assert!(
+                count
+                    .errors
+                    .iter()
+                    .all(|error| error.to_string().starts_with(path))
+            );
+        }
+        let count = engine.count(Path::new("2")).unwrap();
+        assert_eq!(count.total, 0);
+        assert_eq!(count.errors.len(), 1);
+        let count = engine.count(Path::new("3")).unwrap();
+        assert_eq!(count.total, 8);
+        assert!(count.errors.is_empty());
         assert!(!engine.totals.contains_key(&(engine.reader.id(1), None)));
+
+        engine.reader.failures.clear();
+        let count = engine.count(Path::new("1")).unwrap();
+        assert_eq!(count.total, 14);
+        assert!(count.errors.is_empty());
+        assert_eq!(engine.reader.reads.borrow()[&1], 1);
+        assert_eq!(engine.reader.reads.borrow()[&3], 1);
+    }
+
+    #[test]
+    fn missing_report_directory_returns_zero_with_an_error() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("removed");
+        fs::create_dir(&path).unwrap();
+        fs::remove_dir(&path).unwrap();
+        let interrupt = AtomicBool::new(false);
+        for recursive in [false, true] {
+            let mut counter = Counter::new(false, recursive, false, &interrupt);
+            let count = counter.count(&path).unwrap();
+            assert_eq!(count.total, 0);
+            assert_eq!(count.errors.len(), 1);
+            assert!(
+                matches!(&count.errors[0], CountError::Filesystem { path: failed, .. } if failed == &path)
+            );
+        }
+    }
+
+    #[test]
+    fn entry_read_errors_preserve_entries_before_and_after_them() {
+        let temp = tempfile::tempdir().unwrap();
+        fs::write(temp.path().join("first"), "").unwrap();
+        fs::write(temp.path().join("last"), "").unwrap();
+        let interrupt = AtomicBool::new(false);
+        for recursive in [false, true] {
+            let mut entries = fs::read_dir(temp.path()).unwrap();
+            let entries = [
+                entries.next().unwrap(),
+                Err(io::ErrorKind::NotFound.into()),
+                entries.next().unwrap(),
+                Err(io::ErrorKind::PermissionDenied.into()),
+            ];
+            let listing = FsReader {
+                follow: false,
+                recursive,
+            }
+            .read_entries(temp.path(), entries, &interrupt)
+            .unwrap();
+            assert_eq!(listing.count, 2);
+            assert_eq!(listing.errors.len(), 2);
+        }
+    }
+
+    #[test]
+    fn removed_child_still_counts_and_does_not_hide_readable_siblings() {
+        let temp = tempfile::tempdir().unwrap();
+        for name in ["removed", "readable"] {
+            fs::create_dir(temp.path().join(name)).unwrap();
+        }
+        let mut entries: Vec<_> = fs::read_dir(temp.path())
+            .unwrap()
+            .map(|entry| entry.unwrap())
+            .collect();
+        entries.sort_by_key(|entry| std::cmp::Reverse(entry.file_name()));
+        let removed = temp.path().join("removed");
+        fs::remove_dir(&removed).unwrap();
+        let interrupt = AtomicBool::new(false);
+        let listing = FsReader {
+            follow: false,
+            recursive: true,
+        }
+        .read_entries(temp.path(), entries.into_iter().map(Ok), &interrupt)
+        .unwrap();
+        assert_eq!(listing.count, 2);
+        assert_eq!(listing.directories.len(), 1);
+        assert_eq!(listing.directories[0].name, "readable");
+        assert_eq!(listing.errors.len(), 1);
+        assert!(
+            matches!(&listing.errors[0], CountError::Filesystem { path, .. } if path == &removed)
+        );
     }
 
     #[test]

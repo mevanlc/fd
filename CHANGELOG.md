@@ -4,7 +4,8 @@
 - Add `--summary count-children` and `--summary count-descendants`, counting all
   entries in matched directories and parents of other matches independently of
   selection filters. Reuse directory scans, support normal path output and metadata
-  sorting, and omit incomplete counts with diagnostics and a nonzero exit status.
+  sorting, and report partial counts for missing or unreadable entries with
+  diagnostics on stderr and a nonzero exit status.
 - Remove headers from summary reports, including the heading and underline in
   `--summary fext`.
 - Allow `-x/--exec` and `-X/--exec-batch` with `-l/--list-details`, silently

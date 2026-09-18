@@ -24,16 +24,13 @@ pub struct DirEntry {
 
 impl DirEntry {
     /// A report directory, including parents introduced by non-directory matches.
-    pub fn directory(path: PathBuf) -> std::io::Result<Self> {
-        let metadata = path.metadata()?;
-        if !metadata.is_dir() {
-            return Err(std::io::Error::other("no longer a directory"));
-        }
-        Ok(Self {
+    /// Keep its path printable even if it disappeared since selection.
+    pub fn directory(path: PathBuf) -> Self {
+        Self {
             inner: DirEntryInner::Directory(path),
-            metadata: OnceCell::from(Some(metadata)),
+            metadata: OnceCell::new(),
             style: OnceCell::new(),
-        })
+        }
     }
 
     #[inline]
@@ -104,6 +101,11 @@ impl DirEntry {
                 self.metadata().map(|m| m.file_type())
             }
         }
+    }
+
+    pub fn is_dir(&self) -> bool {
+        matches!(self.inner, DirEntryInner::Directory(_))
+            || self.file_type().is_some_and(|ft| ft.is_dir())
     }
 
     pub fn metadata(&self) -> Option<&Metadata> {

@@ -680,7 +680,8 @@ pub struct Opts {
     ///
     /// Directory summaries print '<count>\t<directory>', sorted by ascending count
     /// then path unless -R is supplied. Path output controls and -0 are supported.
-    /// Incomplete counts are omitted with stderr diagnostics and a nonzero exit status.
+    /// Missing or unreadable entries leave partial counts, with stderr diagnostics
+    /// and a nonzero exit status.
     /// All summaries have no header or footer.
     ///
     /// The fext options are single letters, each of which may be prefixed with '-' to disable it

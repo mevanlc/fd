@@ -212,8 +212,11 @@ Directory rows sort by ascending count, then path. `-R/--sort` overrides that
 order using directory metadata. The directory summaries support normal path
 output controls, including color, hyperlinks, absolute paths, separators, and
 `-0` for NUL-terminated records. They accept no summary-specific options.
-Unreadable or otherwise incomplete counts are omitted, with diagnostics on
-stderr and a nonzero exit status; complete rows are still printed.
+Missing or unreadable entries do not stop counting: each row reports the total
+that could be counted, with diagnostics on stderr and a nonzero exit status if
+incomplete. Entries already enumerated still count even if their metadata or
+contents cannot be read. A selected directory that disappears or cannot be opened
+reports zero.
 
 All summary modes conflict with `-x`, `-X`, `-l`, `--format`, and
 `--quiet`/`--has-results`.

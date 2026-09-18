@@ -254,11 +254,17 @@ impl Summarizer {
             if interrupt.load(Ordering::Relaxed) {
                 return Ok(ExitCode::KilledBySigint);
             }
-            let result = DirEntry::directory(path.clone())
-                .map_err(|error| count::CountError::filesystem(path, error))
-                .and_then(|entry| counter.count(path).map(|count| (count, entry)));
-            match result {
-                Ok(row) => rows.push(row),
+            match counter.count(path) {
+                Ok(count) => {
+                    for error in count.errors {
+                        print_error(format!(
+                            "Could not fully count '{}': {error}",
+                            path.display()
+                        ));
+                        status = ExitCode::GeneralError;
+                    }
+                    rows.push((count.total, DirEntry::directory(path.clone())));
+                }
                 Err(count::CountError::Interrupted) => return Ok(ExitCode::KilledBySigint),
                 Err(error) => {
                     print_error(format!("Could not count '{}': {error}", path.display()));
@@ -287,6 +293,60 @@ impl Summarizer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use clap::Parser;
+
+    #[test]
+    fn disappeared_report_directories_still_print_rows() {
+        let temp = tempfile::tempdir().unwrap();
+        let removed = temp.path().join("removed");
+        let replaced = temp.path().join("replaced");
+        let readable = temp.path().join("readable");
+        for path in [&removed, &replaced, &readable] {
+            std::fs::create_dir(path).unwrap();
+        }
+        std::fs::write(readable.join("file"), "").unwrap();
+        let mut summary = Summarizer::new(&SummarySpec::CountChildren);
+        for path in [&removed, &replaced, &readable] {
+            summary.record(&DirEntry::directory(path.clone()));
+        }
+        std::fs::remove_dir(&removed).unwrap();
+        std::fs::remove_dir(&replaced).unwrap();
+        std::fs::write(&replaced, "").unwrap();
+
+        let interrupt = AtomicBool::new(false);
+        for spec in [SummarySpec::CountChildren, SummarySpec::CountDescendants] {
+            summary.spec = spec;
+            for sort in [None, Some("p"), Some("m")] {
+                let mut args = vec![
+                    "fd",
+                    "--no-user-matchsets",
+                    "--color=never",
+                    "--path-separator=/",
+                ];
+                if let Some(sort) = sort {
+                    args.extend(["--sort", sort]);
+                }
+                let opts = crate::cli::Opts::try_parse_from(args).unwrap();
+                let config = crate::construct_config(opts, &[], Vec::new(), None, None).unwrap();
+                let mut output = Vec::new();
+                assert_eq!(
+                    summary.write(&mut output, &config, &interrupt).unwrap(),
+                    ExitCode::GeneralError
+                );
+                let output = String::from_utf8(output).unwrap();
+                let mut lines: Vec<_> = output.lines().collect();
+                lines.sort_unstable();
+                assert_eq!(
+                    lines,
+                    [
+                        format!("0\t{}/", removed.display()).replace('\\', "/"),
+                        format!("0\t{}/", replaced.display()).replace('\\', "/"),
+                        format!("1\t{}/", readable.display()).replace('\\', "/"),
+                    ]
+                );
+            }
+        }
+    }
 
     fn fext_options(spec: &str) -> FextOptions {
         match spec.parse().unwrap() {

@@ -338,7 +338,7 @@ fn directory_alias_selection() {
 
 #[cfg(unix)]
 #[test]
-fn unreadable_counts_are_omitted_and_fail_without_show_errors() {
+fn unreadable_counts_keep_partial_rows_and_fail_without_show_errors() {
     use std::os::unix::fs::PermissionsExt;
     if nix::unistd::Uid::effective().is_root() {
         return;
@@ -367,11 +367,15 @@ fn unreadable_counts_are_omitted_and_fail_without_show_errors() {
     let descendants = run(MODES[1]);
     fs::set_permissions(blocked, fs::Permissions::from_mode(0o755)).unwrap();
     assert_eq!(children.status.code(), Some(1));
-    assert_eq!(children.stdout, b"0\treport/empty/\n5\treport/\n");
+    let expected = b"0\treport/empty/\n0\treport/nested/\n5\treport/\n";
+    assert_eq!(children.stdout, expected);
     assert_eq!(descendants.status.code(), Some(1));
-    assert_eq!(descendants.stdout, b"0\treport/empty/\n");
-    assert!(String::from_utf8_lossy(&children.stderr).contains("Could not count"));
-    assert!(String::from_utf8_lossy(&descendants.stderr).contains("Could not count"));
+    assert_eq!(descendants.stdout, expected);
+    for output in [children, descendants] {
+        let errors = String::from_utf8_lossy(&output.stderr);
+        assert!(errors.contains("Could not fully count"));
+        assert!(errors.contains("report/nested"));
+    }
 }
 
 #[cfg(unix)]

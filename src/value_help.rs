@@ -108,7 +108,8 @@ limits descent relative to each report directory. Boundary and ancestor-loop
 entries count once, without descent. Dangling links count once.
 Rows are '<count>\\t<directory>', sorted by count ascending then path; -R overrides
 this with directory metadata sorting. Path output controls and -0 are supported.
-Incomplete rows are omitted with stderr diagnostics and a nonzero exit status.
+Missing or unreadable entries leave partial counts, with stderr diagnostics
+and a nonzero exit status. Selected directories that cannot be opened report zero.
 All summaries have no header or footer. Conflicts: -x, -X, -l, --format, --quiet.
 
 fext options are single letters; prefix with '-' to disable an option or
