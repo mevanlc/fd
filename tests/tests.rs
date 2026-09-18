@@ -1,3 +1,5 @@
+#[cfg(unix)]
+mod batch;
 mod summary;
 mod testenv;
 
@@ -3074,6 +3076,28 @@ fn test_exec_batch_with_limit() {
             "./one/two/three/directory_foo"
         ],
     );
+}
+
+#[test]
+fn test_batch_threads_arguments() {
+    let te = TestEnv::new(DEFAULT_DIRS, DEFAULT_FILES);
+    for threads in ["1", "4"] {
+        te.assert_output(
+            &[
+                "no_match",
+                "--batch-threads",
+                threads,
+                "-X",
+                "unused-command",
+            ],
+            "",
+        );
+    }
+    for threads in ["0", "-1", "abc"] {
+        te.assert_failure(&["--batch-threads", threads, "-X", "unused-command"]);
+    }
+    te.assert_failure(&["--batch-threads", "2"]);
+    te.assert_failure(&["--batch-threads", "2", "-x", "unused-command"]);
 }
 
 #[test]

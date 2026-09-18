@@ -221,7 +221,24 @@ reports zero.
 All summary modes conflict with `-x`, `-X`, `-l`, `--format`, and
 `--quiet`/`--has-results`.
 
-### job numbers for `-X`
+### parallel batches and job numbers for `-X`
+
+`--batch-threads <N>` runs up to `N` batch processes concurrently:
+
+```console
+$ fd -e rs --batch-size 100 --batch-threads 4 -X check
+```
+
+The default is `1`, preserving serial execution, inherited stdin, and live
+output. With `N > 1`, stdin receives EOF and stdout/stderr are buffered per
+batch until it finishes, preventing interleaving between batches. Output order
+is not guaranteed. The positive-integer limit is shared across repeated `-X`
+commands, whose processes may overlap.
+
+This option requires `-X` and is independent of `-j/--threads`, which controls
+searching and per-result `-x` execution. It does not split batches: use
+`--batch-size` to limit paths per process; OS command-line limits also cause
+splitting. A single batch still runs only one process.
 
 `-X/--exec-batch` runs one process per batch of results. The `{#}` placeholder
 expands to that process's job number, counting from 1, which gives each batch a
@@ -235,6 +252,7 @@ A single `-X` usually runs one process, so `{#}` only varies once the results
 are split into batches — by `--batch-size` or by the command line length limit
 the operating system imposes. Numbers are unique across every process one `fd`
 run spawns, so repeated `-X` options never write to the same `report1.txt`.
+Numbers are assigned during batch construction, not in completion order.
 
 Unlike the path placeholders, `{#}` may appear in any number of arguments, and
 it does not count as the batch's path placeholder: `-X echo {#}` still gets the

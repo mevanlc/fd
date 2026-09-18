@@ -413,7 +413,8 @@ Always output hyperlink escapes, regardless of color settings.
 .RE
 .TP
 .BI "\-j, \-\-threads " num
-Set number of threads to use for searching & executing (default: number of available CPU cores).
+Set number of threads to use for searching and \-x execution (default: number of available CPU cores).
+Use \-\-batch-threads to control \-X execution.
 .TP
 .BI "\-S, \-\-size " size
 Limit results based on the size of files using the format
@@ -643,7 +644,9 @@ Examples:
 .RS
 Execute
 .I command
-once, with all search results as arguments.
+with search results as arguments, split into batches by \-\-batch-size or OS
+command-line limits. Batches run serially by default; \-\-batch-threads controls
+how many batch processes may run concurrently.
 
 The order of the arguments is non-deterministic and should not be relied upon.
 
@@ -659,6 +662,7 @@ process, so '{#}' only varies once the results are split into several batches, e
 \fB\-\-batch\-size\fR or by the operating system's limit on the command line length. Numbers
 are unique across every process a single fd run spawns, so repeated \fB\-X\fR options never
 share one.
+Numbers are assigned during batch construction, not in completion order.
 
 Unlike the placeholders above, '{#}' may appear in any number of arguments, and it does not
 count as the batch's path placeholder. It is rejected by \fB\-\-exec\fR and \fB\-\-format\fR,
@@ -668,8 +672,9 @@ Like \-\-exec, subsequent arguments are assumed to be part of
 .I command
 until either the end of command arguments or a ';' argument. See above.
 
-Like \-\-exec, this can be used multiple times, in which case each command will be run in
-the order given.
+Like \-\-exec, this can be used multiple times. With \-\-batch-threads=1 (the default),
+commands run in the order given. With more batch threads, commands may overlap and
+share one concurrency limit; execution and output order are not guaranteed.
 
 Examples:
 
@@ -693,6 +698,22 @@ Maximum number of arguments to pass to the command given with -X. If the number 
 greater than the given size, the command given with -X is run again with remaining arguments. A
 batch size of zero means there is no limit (default), but note that batching might still happen
 due to OS restrictions on the maximum length of command lines.
+.TP
+.BI "\-\-batch-threads " N
+Maximum number of concurrent batch processes with \-X, shared across repeated
+\-X commands. Requires \-X and a positive integer; the default is 1.
+This is independent of \-j/\-\-threads and does not split results into more batches.
+Use \-\-batch-size to limit paths per process.
+
+With N greater than 1, commands receive EOF on stdin. Each batch's stdout and
+stderr are buffered until it finishes and printed together without additional
+separators. With N equal to 1, commands run serially with inherited stdin and
+live output.
+
+For example, run up to four processes with at most 100 paths each:
+.nf
+    fd -e rs --batch-size 100 --batch-threads 4 -X check
+.fi
 .SH PATTERN SYNTAX
 The regular expression syntax used by fd is documented here:
 

@@ -60,5 +60,10 @@ pub fn batch(
             }
         });
 
-    cmd.execute_batch(paths, config.batch_size, config.effective_path_separator())
+    cmd.execute_batch(
+        paths,
+        config.batch_size,
+        config.batch_threads,
+        config.effective_path_separator(),
+    )
 }

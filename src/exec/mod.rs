@@ -6,15 +6,18 @@ use std::io;
 use std::iter;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread;
 
 use anyhow::{Result, bail};
 use argmax::Command;
+use crossbeam_channel::{Receiver, bounded};
 
 use crate::exec::command::OutputBuffer;
 use crate::exit_codes::{ExitCode, merge_exitcodes};
 use crate::fmt::{FormatTemplate, Token};
 
-use self::command::{execute_commands, handle_cmd_error};
+use self::command::{execute_batch_command, execute_commands, handle_cmd_error};
 pub use self::job::{batch, job};
 
 /// Execution mode of the command
@@ -87,10 +90,79 @@ impl CommandSet {
         execute_commands(commands, OutputBuffer::new(null_separator), buffer_output)
     }
 
-    pub fn execute_batch<I>(&self, paths: I, limit: usize, path_separator: Option<&str>) -> ExitCode
+    pub fn execute_batch<I>(
+        &self,
+        paths: I,
+        limit: usize,
+        threads: usize,
+        path_separator: Option<&str>,
+    ) -> ExitCode
     where
         I: Iterator<Item = PathBuf>,
     {
+        let cancelled = AtomicBool::new(false);
+        if threads == 1 {
+            let mut status = ExitCode::Success;
+            let build_status =
+                self.build_batches(paths, limit, path_separator, &cancelled, &mut |mut cmd| {
+                    let code = execute_batch_command(&mut cmd, false)
+                        .map_err(|e| handle_cmd_error(Some(&cmd), e))?;
+                    status = merge_exitcodes([status, code]);
+                    Ok(())
+                });
+            return merge_exitcodes([status, build_status]);
+        }
+
+        thread::scope(|scope| {
+            let (tx, rx) = bounded(threads);
+            let mut handles = Vec::new();
+            let mut status = ExitCode::Success;
+            for _ in 0..threads {
+                let rx = rx.clone();
+                let cancelled = &cancelled;
+                match thread::Builder::new()
+                    .spawn_scoped(scope, move || batch_worker(rx, cancelled))
+                {
+                    Ok(handle) => handles.push(handle),
+                    Err(e) => {
+                        status = handle_cmd_error(None, e);
+                        cancelled.store(true, Ordering::Relaxed);
+                        break;
+                    }
+                }
+            }
+            // Only workers retain receivers, so a blocked send wakes if they stop.
+            drop(rx);
+
+            if status == ExitCode::Success {
+                status = self.build_batches(paths, limit, path_separator, &cancelled, &mut |cmd| {
+                    if cancelled.load(Ordering::Relaxed) {
+                        return Err(ExitCode::GeneralError);
+                    }
+                    tx.send(cmd).map_err(|_| ExitCode::GeneralError)
+                });
+            }
+            if status != ExitCode::Success {
+                cancelled.store(true, Ordering::Relaxed);
+            }
+            drop(tx);
+
+            // Join every worker, even if an earlier one failed.
+            for handle in handles {
+                status = merge_exitcodes([status, handle.join().unwrap()]);
+            }
+            status
+        })
+    }
+
+    fn build_batches(
+        &self,
+        paths: impl Iterator<Item = PathBuf>,
+        limit: usize,
+        path_separator: Option<&str>,
+        cancelled: &AtomicBool,
+        submit: &mut impl FnMut(Command) -> Result<(), ExitCode>,
+    ) -> ExitCode {
         let mut jobs = JobCounter::default();
         let builders: io::Result<Vec<_>> = self
             .commands
@@ -101,24 +173,44 @@ impl CommandSet {
         match builders {
             Ok(mut builders) => {
                 for path in paths {
+                    if cancelled.load(Ordering::Relaxed) {
+                        return ExitCode::GeneralError;
+                    }
                     for builder in &mut builders {
-                        if let Err(e) = builder.push(&path, path_separator, &mut jobs) {
-                            return handle_cmd_error(Some(&builder.cmd), e);
+                        if let Err(code) = builder.push(&path, path_separator, &mut jobs, submit) {
+                            return code;
                         }
                     }
                 }
 
                 for builder in &mut builders {
-                    if let Err(e) = builder.finish(&mut jobs) {
-                        return handle_cmd_error(Some(&builder.cmd), e);
+                    if let Err(code) = builder.finish(&mut jobs, submit) {
+                        return code;
                     }
                 }
 
-                merge_exitcodes(builders.iter().map(|b| b.exit_code()))
+                ExitCode::Success
             }
             Err(e) => handle_cmd_error(None, e),
         }
     }
+}
+
+fn batch_worker(rx: Receiver<Command>, cancelled: &AtomicBool) -> ExitCode {
+    let mut status = ExitCode::Success;
+    for mut cmd in rx {
+        if cancelled.load(Ordering::Relaxed) {
+            break;
+        }
+        match execute_batch_command(&mut cmd, true) {
+            Ok(code) => status = merge_exitcodes([status, code]),
+            Err(e) => {
+                cancelled.store(true, Ordering::Relaxed);
+                return handle_cmd_error(Some(&cmd), e);
+            }
+        }
+    }
+    status
 }
 
 /// Hands out the numbers substituted for the `{#}` placeholder.
@@ -148,10 +240,11 @@ struct JobArgs {
 struct CommandBuilder<'a> {
     template: &'a CommandTemplate,
     args: JobArgs,
-    cmd: Command,
+    // Taken while a completed command is handed to the executor. An error after
+    // taking it ends construction; otherwise finish() installs the next command.
+    cmd: Option<Command>,
     count: usize,
     limit: usize,
-    exit_code: ExitCode,
 }
 
 impl<'a> CommandBuilder<'a> {
@@ -162,10 +255,9 @@ impl<'a> CommandBuilder<'a> {
         Ok(Self {
             template,
             args,
-            cmd,
+            cmd: Some(cmd),
             count: 0,
             limit,
-            exit_code: ExitCode::Success,
         })
     }
 
@@ -183,41 +275,51 @@ impl<'a> CommandBuilder<'a> {
         path: &Path,
         separator: Option<&str>,
         jobs: &mut JobCounter,
-    ) -> io::Result<()> {
+        submit: &mut impl FnMut(Command) -> Result<(), ExitCode>,
+    ) -> Result<(), ExitCode> {
         if self.limit > 0 && self.count >= self.limit {
-            self.finish(jobs)?;
+            self.finish(jobs, submit)?;
         }
 
-        let arg = self.args.path.generate(path, separator);
+        let mut arg = self.args.path.generate(path, separator);
         if !self
             .cmd
+            .as_ref()
+            .expect("an active batch command")
             .args_would_fit(iter::once(&arg).chain(&self.args.post))
         {
-            self.finish(jobs)?;
+            self.finish(jobs, submit)?;
+            // The new batch may have a different {#}, including in the path argument.
+            arg = self.args.path.generate(path, separator);
         }
 
-        self.cmd.try_arg(arg)?;
+        let cmd = self.cmd.as_mut().expect("an active batch command");
+        cmd.try_arg(arg)
+            .map(|_| ())
+            .map_err(|e| handle_cmd_error(Some(cmd), e))?;
         self.count += 1;
         Ok(())
     }
 
-    fn finish(&mut self, jobs: &mut JobCounter) -> io::Result<()> {
+    fn finish(
+        &mut self,
+        jobs: &mut JobCounter,
+        submit: &mut impl FnMut(Command) -> Result<(), ExitCode>,
+    ) -> Result<(), ExitCode> {
         if self.count > 0 {
-            self.cmd.try_args(&self.args.post)?;
-            if !self.cmd.status()?.success() {
-                self.exit_code = ExitCode::GeneralError;
-            }
+            let mut cmd = self.cmd.take().expect("an active batch command");
+            cmd.try_args(&self.args.post)
+                .map(|_| ())
+                .map_err(|e| handle_cmd_error(Some(&cmd), e))?;
+            submit(cmd)?;
 
             self.args = self.template.split_for_job(jobs.next_job());
-            self.cmd = Self::new_command(&self.args.pre)?;
+            self.cmd =
+                Some(Self::new_command(&self.args.pre).map_err(|e| handle_cmd_error(None, e))?);
             self.count = 0;
         }
 
         Ok(())
-    }
-
-    fn exit_code(&self) -> ExitCode {
-        self.exit_code
     }
 }
 
@@ -322,6 +424,50 @@ impl CommandTemplate {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn batches_split_at_argument_limit_and_rebind_job_numbers() {
+        let commands =
+            CommandSet::new_batch([["unused-command", "job{#}", "{#}:{}", "end{#}"]]).unwrap();
+        let path = "p".repeat(4096);
+        let paths = (0..2000).map(|_| PathBuf::from(&path));
+        let mut batches = 0;
+        let mut count = 0;
+        let status = commands.build_batches(paths, 0, None, &AtomicBool::new(false), &mut |cmd| {
+            batches += 1;
+            let args: Vec<_> = cmd.get_args().map(|arg| arg.to_str().unwrap()).collect();
+            let job = args[0].strip_prefix("job").unwrap();
+            assert_eq!(args.last().unwrap(), &format!("end{job}"));
+            let expected = format!("{job}:{path}");
+            assert!(args[1..args.len() - 1].iter().all(|arg| *arg == expected));
+            count += args.len() - 2;
+            Ok(())
+        });
+        assert_eq!(status, ExitCode::Success);
+        assert!(batches > 1);
+        assert_eq!(count, 2000);
+    }
+
+    #[test]
+    fn batch_construction_error_stops_submission() {
+        let commands = CommandSet::new_batch([["unused-command"]]).unwrap();
+        // Too large for a single argument on any supported platform.
+        let oversized = PathBuf::from("p".repeat(4 * 1024 * 1024));
+        let paths = [PathBuf::from("first"), oversized, PathBuf::from("last")];
+        let mut submitted = Vec::new();
+        let status = commands.build_batches(
+            paths.into_iter(),
+            1,
+            None,
+            &AtomicBool::new(false),
+            &mut |cmd| {
+                submitted.extend(cmd.get_args().map(OsString::from));
+                Ok(())
+            },
+        );
+        assert_eq!(status, ExitCode::GeneralError);
+        assert_eq!(submitted, ["first"]);
+    }
 
     fn generate_str(template: &CommandTemplate, input: &str) -> Vec<String> {
         template

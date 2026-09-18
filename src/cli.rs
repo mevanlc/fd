@@ -723,6 +723,24 @@ pub struct Opts {
     )]
     pub batch_size: usize,
 
+    /// Maximum number of batch processes to run concurrently with -X (default: 1).
+    /// This limit is shared by all repeated -X commands and is independent of --threads.
+    /// Batches are still split only by --batch-size or OS command-line limits.
+    /// With more than one batch thread, commands receive EOF on stdin, their output is
+    /// buffered per batch, and execution/output order is not guaranteed.
+    /// With one batch thread, commands run serially with inherited stdin and live output.
+    #[arg(
+        long,
+        value_name = "N",
+        hide_short_help = true,
+        requires("exec_batch"),
+        default_value = "1",
+        value_parser = str::parse::<NonZeroUsize>,
+        help = "Maximum number of concurrent batch processes with -X",
+        long_help,
+    )]
+    pub batch_threads: NonZeroUsize,
+
     /// Add a custom ignore-file in '.gitignore' format. These files have a low precedence.
     #[arg(
         long,
@@ -767,8 +785,8 @@ pub struct Opts {
     #[arg(long, value_name = "name")]
     pub ignore_contain: Vec<String>,
 
-    /// Set number of threads to use for searching & executing (default: number
-    /// of available CPU cores)
+    /// Set number of threads to use for searching and -x execution (default: number
+    /// of available CPU cores). Use --batch-threads for -X execution.
     #[arg(long, short = 'j', value_name = "num", hide_short_help = true, value_parser = str::parse::<NonZeroUsize>)]
     pub threads: Option<NonZeroUsize>,
 
@@ -1158,7 +1176,11 @@ impl clap::Args for Exec {
                 .conflicts_with("exec")
                 .help("Execute a command with all search results at once")
                 .long_help(
-                    "Execute the given command once, with all search results as arguments.\n\
+                    "Execute the given command with search results as arguments, split into batches \
+                     by --batch-size or OS command-line limits. Batches run serially by default; \
+                     --batch-threads N allows up to N concurrent processes across all -X commands. \
+                     With N > 1, stdin receives EOF, output is buffered per batch, and repeated \
+                     -X commands may overlap.\n\
                      The order of the arguments is non-deterministic, and should not be relied upon.\n\
                      One of the following placeholders is substituted before the command is executed:\n  \
                        '{}':   path (of all search results)\n  \
@@ -1175,6 +1197,7 @@ impl clap::Args for Exec {
                      are split into several batches, either by --batch-size or by the operating \
                      system's limit on the command line length. Numbers are unique across every \
                      process a single fd run spawns, so repeated -X options never share one. \
+                     Numbers are assigned during batch construction, not in completion order. \
                      Unlike the placeholders above, '{#}' may appear in any number of arguments, \
                      and it does not count as the batch's path placeholder.\n\n\
                      Examples:\n\n  \

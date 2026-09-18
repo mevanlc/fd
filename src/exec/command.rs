@@ -1,5 +1,6 @@
 use std::io;
 use std::io::Write;
+use std::process::Stdio;
 
 use argmax::Command;
 
@@ -96,6 +97,30 @@ pub fn execute_commands<I: Iterator<Item = io::Result<Command>>>(
     }
     output_buffer.write();
     ExitCode::Success
+}
+
+/// Execute one batch, keeping launch/I/O errors distinct from a child's failure status.
+pub(super) fn execute_batch_command(
+    cmd: &mut Command,
+    buffer_output: bool,
+) -> io::Result<ExitCode> {
+    let status = if buffer_output {
+        cmd.stdin(Stdio::null());
+        cmd.stdout(Stdio::piped());
+        cmd.stderr(Stdio::piped());
+        let output = cmd.output()?;
+        let mut buffer = OutputBuffer::new(false);
+        buffer.push(output.stdout, output.stderr);
+        buffer.write();
+        output.status
+    } else {
+        cmd.status()?
+    };
+    Ok(if status.success() {
+        ExitCode::Success
+    } else {
+        ExitCode::GeneralError
+    })
 }
 
 pub fn handle_cmd_error(cmd: Option<&Command>, err: io::Error) -> ExitCode {

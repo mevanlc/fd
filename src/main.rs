@@ -520,6 +520,7 @@ fn construct_config(
         summary: opts.summary.take(),
         command: command.map(Arc::new),
         batch_size: opts.batch_size,
+        batch_threads: opts.batch_threads.get(),
         exclude_patterns: opts.exclude.iter().map(|p| String::from("!") + p).collect(),
         ignore_files: std::mem::take(&mut opts.ignore_file),
         size_constraints: size_limits,

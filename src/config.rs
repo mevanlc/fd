@@ -128,6 +128,9 @@ pub struct Config {
     /// unlimited.
     pub batch_size: usize,
 
+    /// Maximum number of concurrent batch processes, independent of search threads.
+    pub batch_threads: usize,
+
     /// A list of glob patterns that should be excluded from the search.
     pub exclude_patterns: Vec<String>,
 

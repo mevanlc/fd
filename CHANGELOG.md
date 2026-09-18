@@ -1,6 +1,10 @@
 # Unreleased
 
 ## Features
+- Add `--batch-threads <N>` for parallel `-X` batches, independent of `-j`.
+  The default `1` preserves serial execution. Higher values share a concurrency
+  limit across repeated `-X` commands, buffer output per batch, and provide EOF
+  on stdin. Batch sizes remain governed by `--batch-size` and OS limits.
 - Add `--summary count-children` and `--summary count-descendants`, counting all
   entries in matched directories and parents of other matches independently of
   selection filters. Reuse directory scans, support normal path output and metadata

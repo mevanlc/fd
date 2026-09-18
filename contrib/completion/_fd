@@ -158,12 +158,13 @@ _fd() {
     '--hyperlink=-[add hyperlinks to output paths]::when:(auto never always)'
 
     + '(threads)'
-    {-j+,--threads=}'[set the number of threads for searching and executing]:number of threads'
+    {-j+,--threads=}'[set the number of threads for searching and -x execution]:number of threads'
 
     + '(exec-cmds)' # execute command
     '(long-listing max-results)'{-x+,--exec=}'[execute command for each search result]:command: _command_names -e:*\;::program arguments: _normal'
     '(long-listing max-results)'{-X+,--exec-batch=}'[execute command for all search results at once]:command: _command_names -e:*\;::program arguments: _normal'
     '(long-listing max-results)--batch-size=[max number of args for each -X call]:size'
+    '(long-listing max-results)--batch-threads=[max number of concurrent -X processes]:N'
 
     + other
     '!(--max-buffer-time)--max-buffer-time=[set amount of time to buffer before showing output]:time (ms)'

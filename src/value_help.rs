@@ -66,7 +66,14 @@ Examples:
 pub const EXEC: &str = "\
 Command execution (-x/--exec, -X/--exec-batch):
   -x runs the command once per search result (in parallel).
-  -X runs the command once with all results as arguments.
+  -X runs the command with results as arguments, split into batches as needed.
+
+-j/--threads controls searching and -x execution.
+--batch-size limits the paths per -X process (0 means no explicit limit).
+--batch-threads <N> limits concurrent -X processes (positive integer, default 1).
+The limit is shared across repeated -X commands; it does not split batches.
+With N > 1, commands may overlap, stdin receives EOF, and output is buffered
+per batch with no guaranteed order. N = 1 keeps inherited stdin and live output.
 
 Placeholders:
   {}    path                {/}   basename
@@ -81,12 +88,14 @@ with ';' if more fd arguments follow.
 
 -X spawns one process per batch, so {#} only varies when the results are
 split up by --batch-size or by the command line length limit. Numbers are
-unique across every process one fd run spawns.
+unique across every process one fd run spawns and are assigned during batch
+construction, not in completion order.
 
 Examples:
   fd -e zip -x unzip
   fd -e jpg -x convert {} {.}.png
   fd -e rs -X wc -l
+  fd -e rs --batch-size 100 --batch-threads 4 -X check
   fd -e rs --batch-size 100 -X sh -c 'check \"$@\" > report{#}.txt' --
 
 To run a program actually named 'help', use a path: -x ./help
