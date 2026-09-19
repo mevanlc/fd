@@ -135,10 +135,24 @@ pub const CONDEXP: &str = "\
 Bash conditional expressions (for --bash, --prune-if, --exclude-if),
 evaluated like bash's [[ ]] for each candidate entry.
 
-Placeholder variables:
-  ${}    path                ${/}   basename
-  ${//}  parent directory    ${.}   path without extension
-  ${/.}  basename without extension
+Placeholder variables (also available in matchset bash clauses):
+  ${}    ${fd_path}          path
+  ${/}   ${fd_name}          basename
+  ${//}  ${fd_parent}        parent directory
+  ${.}   ${fd_path_no_ext}   path without extension
+  ${/.}  ${fd_name_no_ext}   basename without extension
+
+Parameter transformations (use named variables for slash replacement):
+  ${#fd_name}                 length
+  ${fd_name:offset:length}    substring (length optional)
+  ${fd_name#pattern}          remove shortest prefix (## for longest)
+  ${fd_name%pattern}          remove shortest suffix (%% for longest)
+  ${fd_name/pattern/text}     replace first (// all, /# prefix, /% suffix)
+  ${fd_name^}  ${fd_name^^}    uppercase first/all (optional pattern)
+  ${fd_name,}  ${fd_name,,}    lowercase first/all (optional pattern)
+  ${name-word} ${name+word}    default/alternate; :- and :+ also test empty
+Nested expansions work in transformation operands. Unquoted & in replacement
+text inserts the match; quote or escape it for a literal ampersand.
 
 Operators:
   file tests:  -e -f -d -h/-L -b -c -p -S -s(non-empty) -r -w -x
@@ -146,16 +160,29 @@ Operators:
   strings:     == / = (glob)  != (glob)  =~ (regex)  < > (lexicographic)
                -z (empty)  -n (non-empty)
   arithmetic:  -eq -ne -lt -le -gt -ge
-  logic:       && || ! ( )
+  logic:       && || ! [[ ... ]] (no parentheses grouping)
+
+Arithmetic operands and substring indices accept scalar Bash arithmetic,
+including assignments and increments (quote operands containing = or spaces).
+State is local to one expression for one entry; it is not shared with other
+predicates or --and expressions.
+Named path variables are independent copies of the punctuation variables.
+Process environment variables and Bash special-parameter values are not imported.
+Extglobs ?() *() +() @() !() work in ==/!= and case conversion, but not
+removal/replacement patterns. Search case settings apply; matchsets are case-sensitive.
+No command substitution, general $((...)) expansion, arrays, or :=/:? forms.
 
 Relative paths in file tests resolve against the entry's context
-directory: the directory itself for --prune-if, otherwise the entry's
-parent directory.
+directory: the directory itself for directory entries, otherwise the file's
+parent directory. The unchanged path variable refers to the entry itself.
 
 Examples:
   --prune-if '${/} == target && -f CACHEDIR.TAG'
   --exclude-if '-x ${} && ${/} != *.sh'
   fd --bash '${/} == *.log && -s ${}'
+  fd --bash '${fd_name%.log} == server'
+  fd --bash '${fd_name//_/-} == release-notes.md'
+  fd --bash '${#fd_name} -gt 40'
 ";
 
 /// Print `topic` to stdout and exit successfully, like `--help` does.

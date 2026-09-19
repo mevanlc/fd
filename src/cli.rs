@@ -219,6 +219,12 @@ pub struct Opts {
     /// fd placeholder variables `${}` (path), `${/}` (basename), `${//}`
     /// (parent), `${.}` (path without extension), and `${/.}` (basename without
     /// extension).
+    /// Named equivalents are `${fd_path}`, `${fd_name}`, `${fd_parent}`,
+    /// `${fd_path_no_ext}`, and `${fd_name_no_ext}`. These support Bash length,
+    /// substring, prefix/suffix removal, replacement, case conversion, and
+    /// default/alternate expansions. Use named variables for slash replacement.
+    /// Arithmetic operands support scalar expressions; assignments are local to
+    /// one expression for one entry. See '--bash help' for syntax and examples.
     #[arg(
         long,
         conflicts_with_all(&["glob", "regex", "fixed_strings", "exact"]),

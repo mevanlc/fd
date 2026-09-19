@@ -51,7 +51,7 @@
 "os_meta" {
     (f) bash {
         // macos exfat resource fork sidecar files
-        (macos) "[[ ${/} == ._* ]] && [[ -e ${fd_appledouble_companion} ]]"
+        (macos) "[[ ${/} == ._* ]] && [[ -e ${/#._} ]]"
     }
     (f) name literal full {
         (macos) ".DS_Store"

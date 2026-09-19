@@ -1442,6 +1442,193 @@ fn test_bash_search_empty_path_file_test() {
     te.assert_output(&["--bash", "-e ''"], "");
 }
 
+#[test]
+fn test_bash_named_path_variables() {
+    let files = &[
+        "one/a b.txt",
+        "one/é🙂.txt",
+        "one/archive.tar.gz",
+        "one/noext",
+    ];
+    let (te, root) = get_test_env_with_abs_path(&["one"], files);
+    let expression = r#""$fd_path" == "${}" && "$fd_name" == "${/}" &&
+        "$fd_parent" == "${//}" && "$fd_path_no_ext" == "${.}" &&
+        "$fd_name_no_ext" == "${/.}" && -f "$fd_path""#;
+    te.assert_output(&["-tf", "--bash", expression], &files.join("\n"));
+    let absolute = files
+        .iter()
+        .map(|file| format!("{root}/{file}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    te.assert_output(&["-tf", "--absolute-path", "--bash", expression], &absolute);
+}
+
+#[test]
+fn test_bash_parameter_transform_search() {
+    let te = TestEnv::new(
+        &["nested"],
+        &[
+            "nested/report.log",
+            "nested/report.txt",
+            "nested/release_notes.md",
+        ],
+    );
+    for (expression, expected) in [
+        ("${fd_name%.log} == report", "nested/report.log"),
+        (
+            "${fd_name//_/-} == release-notes.md",
+            "nested/release_notes.md",
+        ),
+        ("${fd_name^^} == REPORT.TXT", "nested/report.txt"),
+        ("${#fd_name} -gt 12", "nested/release_notes.md"),
+        ("${fd_name:7:3} == txt", "nested/report.txt"),
+        ("${fd_name} == ${unset:-*.log}", "nested/report.log"),
+        (r#"${fd_name} == "${unset:-*.log}""#, ""),
+        ("${fd_name} =~ ${unset:-[.]md$}", "nested/release_notes.md"),
+        (
+            "${fd_name} == report.@(log|txt)",
+            "nested/report.log\nnested/report.txt",
+        ),
+    ] {
+        te.assert_output(&["--case-sensitive", "-tf", "--bash", expression], expected);
+    }
+}
+
+#[test]
+fn test_bash_transform_pruning_exclusion_and_matchsets() {
+    let te = TestEnv::new(
+        &["skip.tmp/deep", "keep"],
+        &[
+            "skip.tmp/deep/report.log",
+            "keep/report.log",
+            "keep/report.txt",
+        ],
+    )
+    .matchsets_file(r#""logs" { (f) bash { "${fd_name%.log} == report" } }"#);
+    for (flag, expected) in [
+        (
+            "--prune-if",
+            "keep/\nkeep/report.log\nkeep/report.txt\nskip.tmp/",
+        ),
+        ("--exclude-if", "keep/\nkeep/report.log\nkeep/report.txt"),
+    ] {
+        te.assert_output(&["-tf", "-td", flag, "${fd_name%.tmp} == skip"], expected);
+    }
+    te.assert_output(
+        &["-tf", "--exclude-if", "${fd_name%.log} == report"],
+        "keep/report.txt",
+    );
+    te.assert_output(&["-m", "logs"], "keep/report.log\nskip.tmp/deep/report.log");
+}
+
+#[test]
+fn test_bash_arithmetic_state_is_expression_local() {
+    let files = &["one/a.txt", "one/b.txt", "two/c.txt", "two/d.txt"];
+    let te = TestEnv::new(&["one", "two"], files)
+        .matchsets_file(r#""local" { (f) bash { "n++ -eq 0 && $n == 1" } }"#)
+        .env("n", "99");
+    for threads in ["1", "4"] {
+        te.assert_output(
+            &[
+                "--threads",
+                threads,
+                "-tf",
+                "-m",
+                "local",
+                "--exclude-if",
+                "'n=10' -eq 0",
+                "--prune-if",
+                "'n=10' -eq 0",
+                "--bash",
+                "n++ -eq 0 && $n == 1",
+                "--and",
+                "! -v n",
+            ],
+            &files.join("\n"),
+        );
+    }
+    te.assert_output(
+        &["-tf", "--bash", "'n=2' -eq 0 || $n == 2"],
+        &files.join("\n"),
+    );
+    te.assert_output(
+        &["-tf", "--bash", "${fd_name:n=1:1} == . && n -eq 1"],
+        &files.join("\n"),
+    );
+    te.assert_output(
+        &["-tf", "--bash", "1 -eq 1 || 1/0 -eq 0"],
+        &files.join("\n"),
+    );
+    te.assert_output(
+        &[
+            "-tf",
+            "--bash",
+            "'fd_name=7' -eq 7 && $fd_name == 7 && ${/} != 7",
+        ],
+        &files.join("\n"),
+    );
+}
+
+#[test]
+fn test_bash_matchset_case_policy_in_fast_and_generic_conditions() {
+    // Distinct names also work on case-insensitive filesystems.
+    let te = TestEnv::new(&[], &["README.txt", "readme.md"]).matchsets_file(
+        r#"
+        "fast" { (f) bash { "${fd_name} == README.*" } }
+        "generic" { (f) bash { "${fd_name%.*} == README" } }
+        "dynamic_rhs" { (f) bash { "${fd_name} == ${unset:-README.*}" } }
+        "plain_generic" { (f) bash { "x${fd_name} == xREADME.*" } }
+    "#,
+    );
+    for name in ["fast", "generic", "dynamic_rhs", "plain_generic"] {
+        te.assert_output(&["--ignore-case", "-m", name], "README.txt");
+    }
+    for expression in [
+        "${fd_name} == README.*",
+        "${fd_name%.*} == README",
+        "${fd_name} == ${unset:-README.*}",
+    ] {
+        te.assert_output(
+            &["-tf", "--ignore-case", "--bash", expression],
+            "README.txt\nreadme.md",
+        );
+        te.assert_output(
+            &["-tf", "--case-sensitive", "--bash", expression],
+            "README.txt",
+        );
+    }
+}
+
+#[test]
+fn test_bash_evaluation_error_diagnostic() {
+    let te = TestEnv::new(&[], &["file.txt"]);
+    te.assert_error(
+        &["-tf", "--threads", "1", "--bash", "1/0 -eq 0"],
+        "[fd error]: Could not evaluate bash conditional expression: arithmetic division by zero",
+    );
+}
+
+#[test]
+fn test_bash_help_describes_transformations() {
+    let te = TestEnv::new(&[], &[]);
+    for args in [
+        &["--bash", "help"],
+        &["--prune-if", "help"],
+        &["--exclude-if", "help"],
+    ] {
+        let help = te.assert_success_and_get_normalized_output(".", args);
+        for expected in [
+            "${fd_name}",
+            "${fd_name_no_ext}",
+            "${fd_name//_/-}",
+            "no parentheses grouping",
+            "one expression",
+        ] {
+            assert!(help.contains(expected), "missing {expected}: {help}");
+        }
+    }
+}
+
 /// Conditional pruning (--prune-if)
 #[test]
 fn test_prune_if() {
@@ -1873,12 +2060,28 @@ fn test_matchsets_os_meta_matches_appledouble_sidecars_with_companions() {
             "nested/photo.jpg",
             "nested/._photo.jpg",
             "nested/._orphan.jpg",
+            "nested/a b.txt",
+            "nested/._a b.txt",
+            "nested/._",
         ],
     );
 
     te.assert_output(
         &["--hidden", "--no-ignore", "-m", "os_meta", "."],
-        "nested/._photo.jpg",
+        "nested/._photo.jpg\nnested/._a b.txt",
+    );
+    te.assert_output(
+        &[
+            "--hidden",
+            "--no-ignore",
+            "-tf",
+            "-M",
+            "os_meta",
+            "--glob",
+            "*",
+            "nested",
+        ],
+        "nested/photo.jpg\nnested/a b.txt\nnested/._orphan.jpg\nnested/._",
     );
 }
 

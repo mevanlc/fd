@@ -101,17 +101,54 @@ language. Expressions are parsed and evaluated natively through
 - `--prune-if <expression>` prevents descent into matching directories; and
 - `--exclude-if <expression>` excludes matching entries.
 
-Expressions can use fd's path placeholders: `${}`, `${/}`, `${//}`, `${.}` and
-`${/.}`.
+All four expression entry points, including matchset `bash` clauses, support
+fd's path placeholders and their named equivalents:
+
+| Placeholder | Named equivalent | Value |
+|---|---|---|
+| `${}` | `${fd_path}` | path |
+| `${/}` | `${fd_name}` | basename |
+| `${//}` | `${fd_parent}` | parent directory |
+| `${.}` | `${fd_path_no_ext}` | path without extension |
+| `${/.}` | `${fd_name_no_ext}` | basename without extension |
+
+The punctuation syntax is enabled automatically by fd. Use the named forms
+for the full set of Bash parameter transformations: length, substring,
+prefix/suffix removal, pattern replacement, case conversion, and default or
+alternate values. Slash replacement syntax is ambiguous on punctuation names.
 
 ```console
 $ fd --bash '${/} == *.log && -s ${}'
 $ fd --prune-if '-e ${}/.git'
 $ fd --exclude-if '-x ${} && ${/} != *.sh'
+$ fd --bash '${fd_name%.log} == server'
+$ fd --bash '${fd_name//_/-} == release-notes.md'
+$ fd --bash '${#fd_name} -gt 40'
+$ fd --bash '${fd_name} == @(README|LICENSE)*'
 ```
 
+Arithmetic comparison operands and substring indices accept scalar Bash
+arithmetic, including assignments and increments. Quote operands containing `=`
+or spaces, for example `fd --bash '"n=2" -eq 2 && n++ -eq 2 && $n == 3'`.
+Variables persist within one expression for one entry, including across `&&`
+and `||`, but never between entries, separate predicates, or `--and` expressions.
+Named path variables are initialized independently: assigning one does not
+change its punctuation equivalent or the filesystem. Process environment
+variables and Bash special parameter values are not imported.
+
+Extended globs (`?(...)`, `*(...)`, `+(...)`, `@(...)`, `!(...)`) are enabled
+in `==`/`!=` and case conversion, but disabled in prefix/suffix removal and
+replacement, matching Bash defaults. In replacement text, unquoted `&` inserts
+the matched text (`patsub_replacement` is enabled). Search expressions respect
+fd's case settings; matchset expressions are always case-sensitive.
+
+Use `[[ ... ]]` to group conditions; `( ... )` grouping is not supported.
+Command substitution, general `$((...))` expansion, arrays, and parameter
+assignment/error forms such as `${name:=value}` remain unsupported.
+
 Common simple expressions are compiled into native matchers instead of being
-interpreted separately for every entry.
+interpreted separately for every entry. Expressions containing arithmetic or
+parameter transformations use one evaluator to preserve their local state.
 
 ### pcre2
 

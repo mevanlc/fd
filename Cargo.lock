@@ -86,9 +86,9 @@ checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 
 [[package]]
 name = "bash-condexp"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9cdb968c6fca87aac201cefae06d674fc11b63a7091ef845da1ac232c6420a1"
+checksum = "d18b17ae30e33a83a8277fdf006d216f805ba31e5ff3daca7a6db6512dc30c48"
 dependencies = [
  "libc",
  "regex",

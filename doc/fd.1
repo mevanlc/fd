@@ -142,6 +142,29 @@ characters. Cannot be used together with '\-\-glob', '\-\-fixed\-strings', or '\
 Treat the search pattern as a bash conditional expression. Expressions can use the fd placeholder
 variables '${}' (path), '${/}' (basename), '${//}' (parent), '${.}' (path without extension),
 and '${/.}' (basename without extension).
+Named equivalents are '${fd_path}', '${fd_name}', '${fd_parent}', '${fd_path_no_ext}',
+and '${fd_name_no_ext}', respectively. Both spellings work automatically in search,
+pruning, exclusion, and matchset expressions.
+.IP
+Parameter transformations include length ('${#fd_name}'), substring, prefix/suffix removal
+('#', '##', '%', '%%'), pattern replacement, case conversion, and default/alternate values.
+Use named variables for slash replacement, which is ambiguous on punctuation names.
+For example, '${fd_name%.log} == server' removes a suffix, and
+\&'${fd_name//_/-} == release-notes.md' replaces all underscores before comparing.
+.IP
+Arithmetic operands and substring indices support scalar Bash arithmetic, including assignments
+and increments; quote operands containing '=' or spaces. State is local to one expression for
+one entry, never shared between entries, predicates, or '\-\-and' expressions.
+Named path variables are independent copies of the punctuation variables;
+assignments do not alter the filesystem. Process environment variables
+and Bash special-parameter values are not imported.
+.IP
+Extended globs are enabled in '=='/'!=' and case conversion but disabled in removal/replacement
+patterns, matching Bash defaults. Unquoted '&' in replacement text inserts the matched text.
+Search expressions follow fd's case settings; matchset expressions are case-sensitive.
+Use '[[ ... ]]' for grouping, not parentheses. Command substitution, general '$((...))'
+expansion, arrays, and parameter assignment/error forms are unsupported.
+See 'fd \-\-bash help' for the syntax reference.
 .TP
 .BI "\-\-and " pattern
 Add additional required search patterns, all of which must be matched. Multiple additional
