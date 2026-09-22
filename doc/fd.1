@@ -270,12 +270,20 @@ Print version information.
 Limit directory traversal to at most
 .I d
 levels of depth. By default, there is no limit on the search depth.
+A depth of 0 matches only the search directories themselves, or the current
+directory when no paths are given. Inputs must still be directories. Result
+filters apply, but roots are exempt from hidden-file rules, ignore files, and
+\fB\-E/\-\-exclude\fR. Other depths omit the roots. Directory summaries and
+executed commands can still inspect their contents.
 .TP
 .BI "\-\-min\-depth " d
 Only show search results starting at the given depth. See also: '--max-depth' and '--exact-depth'.
+A minimum depth of 0 alone does not include search roots; use '--max-depth 0'.
+A positive minimum depth combined with '--max-depth 0' produces no matches.
 .TP
 .BI "\-\-exact\-depth " d
 Only show search results at the exact given depth. This is an alias for '--min-depth <depth> --max-depth <depth>'.
+A depth of 0 matches only the search directories themselves, as with '--max-depth 0'.
 .TP
 .B \-\-prune
 Do not traverse into matching directories.

@@ -1,6 +1,10 @@
 # Unreleased
 
 ## Features
+- Make `-d0` / `--max-depth 0` and `--exact-depth 0` match search directories
+  themselves without descending. With no paths, select the current directory.
+  Result filters apply; roots retain their exemption from hidden-file rules,
+  ignore files, and `--exclude`. Other depths still omit search roots.
 - Add `--batch-threads <N>` for parallel `-X` batches, independent of `-j`.
   The default `1` preserves serial execution. Higher values share a concurrency
   limit across repeated `-X` commands, buffer output per batch, and provide EOF

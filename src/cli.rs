@@ -359,6 +359,12 @@ pub struct Opts {
 
     /// Limit the directory traversal to a given depth. By default, there is no
     /// limit on the search depth.
+    ///
+    /// A depth of 0 matches only the search directories themselves, or the current
+    /// directory when no paths are given. Result filters still apply, but roots
+    /// are exempt from hidden-file rules, ignore files, and '--exclude'. Other
+    /// depths omit the roots. Directory summaries and executed commands can
+    /// still inspect their contents.
     #[arg(
         long,
         short = 'd',
@@ -370,6 +376,7 @@ pub struct Opts {
     max_depth: Option<usize>,
 
     /// Only show search results starting at the given depth.
+    /// A minimum depth of 0 alone does not include search roots; use '--max-depth 0'.
     /// See also: '--max-depth' and '--exact-depth'
     #[arg(
         long,
@@ -383,6 +390,7 @@ pub struct Opts {
 
     /// Only show search results at the exact given depth. This is an alias for
     /// '--min-depth <depth> --max-depth <depth>'.
+    /// A depth of 0 matches only the search directories themselves, as with '--max-depth 0'.
     #[arg(long, value_name = "depth", hide_short_help = true, conflicts_with_all(&["max_depth", "min_depth"]),
     help = "Only show search results at the exact given depth",
         long_help,

@@ -54,8 +54,8 @@ pub struct Config {
 
     /// The maximum search depth, or `None` if no maximum search depth should be set.
     ///
-    /// A depth of `1` includes all files under the current directory, a depth of `2` also includes
-    /// all files under subdirectories of the current directory, etc.
+    /// A depth of `0` selects only the search roots. A depth of `1` includes their immediate
+    /// children, a depth of `2` also includes grandchildren, etc. Roots are otherwise omitted.
     pub max_depth: Option<usize>,
 
     /// The minimum depth for reported entries, or `None`.

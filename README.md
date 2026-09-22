@@ -258,6 +258,28 @@ reports zero.
 All summary modes conflict with `-x`, `-X`, `-l`, `--format`, and
 `--quiet`/`--has-results`.
 
+### depth zero
+
+`-d0` / `--max-depth 0` and `--exact-depth 0` match the supplied search
+directories themselves without descending into their children. With no paths,
+the current directory is the candidate. Inputs must still be directories.
+
+For example, from `~/.rustup/toolchains`, this zsh command passes the selected
+toolchain directories themselves to the batch command:
+
+```zsh
+fd . -d0 *~(stable*|1.98*) -X echo applesauce compress
+```
+
+Name, type, metadata, matchset, Bash, and `--ignore-contain` filters apply to
+roots. As with ordinary search roots, hidden-file rules, ignore files, and
+`-E/--exclude` do not exclude them. Matches support the normal output, sorting,
+summaries, and execution options. Directory summaries and executed commands
+can still inspect the selected directories' contents.
+
+Other maximum depths omit the roots, and `--min-depth 0` alone does not include
+them. Combining `-d0` with a positive minimum depth produces no matches.
+
 ### parallel batches and job numbers for `-X`
 
 `--batch-threads <N>` runs up to `N` batch processes concurrently:

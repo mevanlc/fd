@@ -115,9 +115,13 @@ pub fn osstr_to_bytes(input: &OsStr) -> Cow<'_, [u8]> {
     }
 }
 
-/// Remove the `./` prefix from a path.
+/// Remove the `./` prefix from a path, retaining `.` for the current directory itself.
 pub fn strip_current_dir(path: &Path) -> &Path {
-    path.strip_prefix(".").unwrap_or(path)
+    match path.strip_prefix(".") {
+        Ok(relative) if relative.as_os_str().is_empty() => Path::new("."),
+        Ok(relative) => relative,
+        Err(_) => path,
+    }
 }
 
 /// Default value for the path_separator, mainly for MSYS/MSYS2, which set the MSYSTEM
@@ -142,6 +146,9 @@ mod tests {
 
     #[test]
     fn strip_current_dir_basic() {
+        assert_eq!(strip_current_dir(Path::new(".")), Path::new("."));
+        assert_eq!(strip_current_dir(Path::new("./")), Path::new("."));
+        assert_eq!(strip_current_dir(Path::new("")), Path::new(""));
         assert_eq!(strip_current_dir(Path::new("./foo")), Path::new("foo"));
         assert_eq!(strip_current_dir(Path::new("foo")), Path::new("foo"));
         assert_eq!(

@@ -103,7 +103,7 @@ fn format_path_with_symlink_target(entry: &DirEntry, config: &Config) -> String 
         path = replace_path_separator(&path, separator);
     }
 
-    if entry.file_type().is_some_and(|ft| ft.is_dir()) {
+    if needs_trailing_slash(entry, config) {
         path.push_str(&config.actual_path_separator);
     }
 
@@ -280,7 +280,17 @@ fn format_human_size(size: u64) -> String {
     }
 }
 
-// Display a trailing slash if the path is a directory and the config option is enabled.
+fn needs_trailing_slash(entry: &DirEntry, config: &Config) -> bool {
+    entry.is_dir()
+        && !entry
+            .stripped_path(config)
+            .as_os_str()
+            .as_encoded_bytes()
+            .last()
+            .is_some_and(|&byte| std::path::is_separator(char::from(byte)))
+}
+
+// Display a trailing slash if the directory path does not already have one.
 // If the path_separator option is set, display that instead.
 // The trailing slash will not be colored.
 #[inline]
@@ -290,7 +300,7 @@ fn print_trailing_slash<W: Write>(
     config: &Config,
     style: Option<&Style>,
 ) -> io::Result<()> {
-    if entry.is_dir() {
+    if needs_trailing_slash(entry, config) {
         write!(
             stdout,
             "{}",
@@ -363,7 +373,11 @@ fn print_entry_colorized<W: Write>(
         .style(ls_colors)
         .map(Style::to_nu_ansi_term_style)
         .unwrap_or_default();
-    let safe_basename = maybe_sanitize(&path_str[offset..], config.interactive_terminal);
+    let mut basename = Cow::from(&path_str[offset..]);
+    if let Some(separator) = config.effective_path_separator() {
+        *basename.to_mut() = replace_path_separator(&basename, separator);
+    }
+    let safe_basename = maybe_sanitize(&basename, config.interactive_terminal);
     write!(stdout, "{}", style.paint(safe_basename.as_ref()))?;
 
     print_trailing_slash(

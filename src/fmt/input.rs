@@ -10,8 +10,10 @@ pub fn basename(path: &Path) -> &OsStr {
 
 /// Removes the extension from the path
 pub fn remove_extension(path: &Path) -> OsString {
+    let Some(stem) = path.file_stem() else {
+        return strip_current_dir(path).as_os_str().to_owned();
+    };
     let dirname = dirname(path);
-    let stem = path.file_stem().unwrap_or(path.as_os_str());
 
     let path = PathBuf::from(dirname).join(stem);
 
@@ -59,6 +61,11 @@ mod path_tests {
         hidden:             remove_extension  for  ".foo"         =>  ".foo"
         remove_ext_utf8:    remove_extension  for  "💖.txt"       =>  "💖"
         remove_ext_empty:   remove_extension  for  ""             =>  ""
+        remove_ext_current: remove_extension  for  "."            =>  "."
+        remove_ext_dot_slash: remove_extension for "./"           =>  "."
+        remove_ext_parent:  remove_extension  for  ".."           =>  ".."
+        remove_ext_nested_parent: remove_extension for "foo/.."   =>  "foo/.."
+        remove_ext_root:    remove_extension  for  "/"            =>  "/"
 
         basename_simple:  basename  for  "foo.txt"      =>  "foo.txt"
         basename_dir:     basename  for  "dir/foo.txt"  =>  "foo.txt"

@@ -1,5 +1,6 @@
 #[cfg(unix)]
 mod batch;
+mod depth;
 mod summary;
 mod testenv;
 

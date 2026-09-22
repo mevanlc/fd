@@ -776,8 +776,8 @@ impl WorkerState {
                             return WalkState::Skip;
                         }
                     }
-                    if e.depth() == 0 {
-                        // Skip the root directory entry.
+                    if e.depth() == 0 && config.max_depth != Some(0) {
+                        // Only include search roots when explicitly selecting depth zero.
                         return WalkState::Continue;
                     }
                 }
@@ -1044,14 +1044,8 @@ fn search_str_for_entry<'a>(
         let path = entry_path.strip_prefix(".").unwrap_or(entry_path);
         Cow::Owned(cwd.join(path).into())
     } else {
-        match entry_path.file_name() {
-            Some(filename) => Cow::Borrowed(filename),
-            None => unreachable!(
-                "Encountered file system entry without a file name. This should only \
-                 happen for paths like 'foo/bar/..' or '/' which are not supposed to \
-                 appear in a file system traversal."
-            ),
-        }
+        // Depth-zero roots such as '.', '..', and '/' have no normal filename.
+        Cow::Borrowed(entry_path.file_name().unwrap_or(entry_path.as_os_str()))
     }
 }
 
