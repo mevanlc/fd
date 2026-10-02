@@ -248,7 +248,14 @@ fn zero_depth_directory_summaries() {
     for (mode, count) in [("count-children", 2), ("count-descendants", 3)] {
         crate::assert_exact_output(
             &te,
-            &["-d0", "--summary", mode, "--path-separator=/", ".", "alpha"],
+            &[
+                "-d0",
+                "--summarize",
+                mode,
+                "--path-separator=/",
+                ".",
+                "alpha",
+            ],
             &format!("{count}\talpha/\n"),
         );
     }

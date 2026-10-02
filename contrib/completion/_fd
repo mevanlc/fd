@@ -95,7 +95,7 @@ _fd() {
     '(long-listing exec-cmds)'{-R+,--sort=}'[sort by time or size; uppercase reverses; see --help]:sort expression'
 
     + '(summary)' # summary output
-    '(long-listing exec-cmds)--summary=[print a summary of the search results instead of the results]:summary-spec'
+    '(long-listing exec-cmds)--summarize=[print a summary of the search results instead of the results]:summary-spec'
 
     + '(max-results)' # max number of results
     '(long-listing exec-cmds)--max-results=[limit number of search results to given count and quit]:count'

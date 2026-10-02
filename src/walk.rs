@@ -149,7 +149,7 @@ struct ReceiverBuffer<'a, W> {
     buffer: Vec<DirEntry>,
     /// Result count.
     num_results: usize,
-    /// Summary accumulator, if `--summary` was supplied. When set, results are
+    /// Summary accumulator, if `--summarize` was supplied. When set, results are
     /// counted instead of printed, and the summary is printed at the end.
     summarizer: Option<Summarizer>,
 }

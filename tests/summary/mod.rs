@@ -20,7 +20,7 @@ fn fixture() -> TestEnv {
 }
 
 fn assert_report(te: &TestEnv, mode: &str, args: &[&str], expected: &str) {
-    let mut arguments = vec!["--summary", mode, "--color=never", "--path-separator=/"];
+    let mut arguments = vec!["--summarize", mode, "--color=never", "--path-separator=/"];
     arguments.extend_from_slice(args);
     crate::assert_exact_output(te, &arguments, expected);
 }
@@ -125,7 +125,7 @@ fn parent_of_top_level_file_and_path_controls() {
     for (mode, count) in MODES.into_iter().zip([5, 8]) {
         let output = te.assert_success_and_get_output(
             "report",
-            &["--summary", mode, "--exact", "a.rs", "--path-separator=/"],
+            &["--summarize", mode, "--exact", "a.rs", "--path-separator=/"],
         );
         assert_eq!(output.stdout, format!("{count}\t./\n").as_bytes());
         assert_report(
@@ -200,13 +200,13 @@ fn output_conflicts_and_specs() {
             vec!["--quiet"],
             vec!["--has-results"],
         ] {
-            let mut args = vec!["--summary", mode];
+            let mut args = vec!["--summarize", mode];
             args.extend(flags);
             te.assert_failure(&args);
         }
     }
-    te.assert_failure(&["--summary", "count-children:s"]);
-    te.assert_failure(&["--summary", "count-descendants:i"]);
+    te.assert_failure(&["--summarize", "count-children:s"]);
+    te.assert_failure(&["--summarize", "count-descendants:i"]);
     assert_report(
         &te,
         "count-children:",
@@ -352,7 +352,7 @@ fn unreadable_counts_keep_partial_rows_and_fail_without_show_errors() {
             .args([
                 "--no-global-ignore-file",
                 "--no-user-matchsets",
-                "--summary",
+                "--summarize",
                 mode,
                 "--path-separator=/",
                 "-td",
@@ -387,7 +387,7 @@ fn raw_names_colors_and_hyperlinks() {
         let output = te.assert_success_and_get_output(
             ".",
             &[
-                "--summary",
+                "--summarize",
                 mode,
                 "--exact",
                 "report",
@@ -414,7 +414,7 @@ fn raw_names_colors_and_hyperlinks() {
     let output = te.assert_success_and_get_output(
         ".",
         &[
-            "--summary",
+            "--summarize",
             MODES[0],
             "^strange",
             "-0",

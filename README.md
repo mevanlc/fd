@@ -203,12 +203,12 @@ Sorting buffers the result set until traversal finishes.
 
 All summary reports have no header or footer.
 
-`--summary fext` prints counts grouped by file extension instead of printing
+`--summarize fext` prints counts grouped by file extension instead of printing
 the matching paths:
 
 ```console
-$ fd --summary fext
-$ fd -tf --summary fext:@d-i-s
+$ fd --summarize fext
+$ fd -tf --summarize fext:@d-i-s
 ```
 
 The option letters after `:` are `i` for case-folded extensions, `d` for
@@ -216,14 +216,14 @@ including dotfiles and `s` for ascending count. Prefix a letter with `-` to
 disable it or `@` to use the platform default. Dotfiles and ascending counts
 are enabled by default; case folding defaults on for macOS and Windows.
 
-`--summary count-children` counts all immediate filesystem entries in each
-selected directory. `--summary count-descendants` gives the recursive total,
+`--summarize count-children` counts all immediate filesystem entries in each
+selected directory. `--summarize count-descendants` gives the recursive total,
 including descendant directories. Both print `<count>\t<directory>` rows with
 an unpadded count and a literal tab:
 
 ```console
-$ fd -td --summary count-children
-$ fd -e rs --summary count-descendants
+$ fd -td --summarize count-children
+$ fd -e rs --summarize count-descendants
 ```
 
 Matched directories select themselves; every other matched entry selects its
@@ -350,7 +350,7 @@ $ fd --bash help
 ```
 
 This works with `-t`, `-S`, `-R`, `-x`, `-X`, `--changed-within`,
-`--changed-before`, `--summary`, `--bash`, `--prune-if` and `--exclude-if`.
+`--changed-before`, `--summarize`, `--bash`, `--prune-if` and `--exclude-if`.
 
 Multiline diagnostics preserve their intended line breaks while unsafe control
 characters remain escaped.

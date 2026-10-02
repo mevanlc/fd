@@ -1,6 +1,7 @@
 # Unreleased
 
 ## Features
+- Rename `--summary` to `--summarize`.
 - Make `-d0` / `--max-depth 0` and `--exact-depth 0` match search directories
   themselves without descending. With no paths, select the current directory.
   Result filters apply; roots retain their exemption from hidden-file rules,
@@ -9,13 +10,13 @@
   The default `1` preserves serial execution. Higher values share a concurrency
   limit across repeated `-X` commands, buffer output per batch, and provide EOF
   on stdin. Batch sizes remain governed by `--batch-size` and OS limits.
-- Add `--summary count-children` and `--summary count-descendants`, counting all
+- Add `--summarize count-children` and `--summarize count-descendants`, counting all
   entries in matched directories and parents of other matches independently of
   selection filters. Reuse directory scans, support normal path output and metadata
   sorting, and report partial counts for missing or unreadable entries with
   diagnostics on stderr and a nonzero exit status.
 - Remove headers from summary reports, including the heading and underline in
-  `--summary fext`.
+  `--summarize fext`.
 - Allow `-x/--exec` and `-X/--exec-batch` with `-l/--list-details`, silently
   disabling long listing when a command is given.
 - Add `--ignore-parent` option to override `--no-ignore-parent`, see #1958 (@tmchow)
@@ -34,7 +35,7 @@
   name from the selection, a bare `-` (or `--clear-include-matchsets`/`--clear-exclude-matchsets`)
   clears it. Useful for undoing a selection baked into a shell alias.
 - Many options with a compact value syntax (`-t`, `-S`, `-R`/`--sort`, `--changed-within`,
-  `--changed-before`, `--summary`, `-x`, `-X`, `--bash`, `--prune-if`, `--exclude-if`)
+  `--changed-before`, `--summarize`, `-x`, `-X`, `--bash`, `--prune-if`, `--exclude-if`)
   now accept the literal value `help` to print a cheat sheet for that option's syntax.
 - Add `-P`/`--no-full-path` to override `-p`/`--full-path`, e.g. one baked into a shell alias.
 - Add the `{#}` placeholder for `-X`/`--exec-batch`, which expands to the 1-based job number

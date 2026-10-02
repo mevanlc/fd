@@ -14,7 +14,7 @@ use crate::error::print_error;
 use crate::exit_codes::ExitCode;
 use crate::{output, walk};
 
-/// A summary to produce instead of the regular search results (`--summary`).
+/// A summary to produce instead of the regular search results (`--summarize`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SummarySpec {
     /// Summarize the file extensions of the search results (`fext`).

@@ -102,7 +102,7 @@ To run a program actually named 'help', use a path: -x ./help
 ";
 
 pub const SUMMARY: &str = "\
-Summary specs (for --summary): '<summary>[:<options>]'.
+Summary specs (for --summarize): '<summary>[:<options>]'.
   fext   count how many results share each file extension; a dotfile's
          whole name counts as its extension, and entries without an
          extension are counted under '(none)'
@@ -128,7 +128,7 @@ fext options are single letters; prefix with '-' to disable an option or
   d   include dotfiles (default: enabled)
   s   sort by ascending count; '-s' sorts by descending count
 
-Examples: --summary fext    --summary fext:@d-i-s
+Examples: --summarize fext    --summarize fext:@d-i-s
 ";
 
 pub const CONDEXP: &str = "\

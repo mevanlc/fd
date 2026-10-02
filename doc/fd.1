@@ -44,7 +44,7 @@ Options may be given anywhere on the command line.
 Several options with a compact value syntax accept the literal value 'help' to
 print a cheat sheet for that option's syntax, e.g. 'fd \-S help'. These are:
 \&'\-t', '\-S', '\-R/\-\-sort', '\-\-changed\-within', '\-\-changed\-before',
-\&'\-\-summary', '\-x', '\-X', '\-\-bash', '\-\-prune\-if', and '\-\-exclude\-if'.
+\&'\-\-summarize', '\-x', '\-X', '\-\-bash', '\-\-prune\-if', and '\-\-exclude\-if'.
 .SH OPTIONS
 .TP
 .B \-H, \-\-hidden
@@ -567,7 +567,7 @@ Notice that you can use "{{" and "}}" to escape "{" and "}" respectively, which 
 useful if you need to include the literal text of one of the above placeholders.
 .RE
 .TP
-.BI "\-\-summary " summary\-spec
+.BI "\-\-summarize " summary\-spec
 Instead of printing the search results, print a summary of them.
 
 All summaries have no header or footer and conflict with \-x, \-X, \-l, \-\-format,
@@ -589,7 +589,7 @@ include dotfiles (default: enabled)
 .IP s
 sort by ascending count (default); '\-s' sorts by descending count
 .P
-Examples: '\-\-summary fext', '\-\-summary fext:@d\-i\-s'
+Examples: '\-\-summarize fext', '\-\-summarize fext:@d\-i\-s'
 .RE
 .P
 'count-children' counts all immediate entries in each selected directory.

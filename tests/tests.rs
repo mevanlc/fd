@@ -2258,7 +2258,7 @@ fn test_value_help_topics() {
         (&["--changed-before", "help"], "Time filters"),
         (&["-R", "help"], "Sort expressions"),
         (&["--sort", "help"], "Sort expressions"),
-        (&["--summary", "help"], "Summary specs"),
+        (&["--summarize", "help"], "Summary specs (for --summarize)"),
         (&["-x", "help"], "Command execution"),
         (&["-X", "help"], "Command execution"),
         (&["--bash", "help"], "Bash conditional expressions"),
@@ -2554,7 +2554,7 @@ fn test_extension() {
     te4.assert_output(&["--hidden", "--extension", ".hidden"], "test.hidden");
 }
 
-/// Assert that fd produces this exact stdout (--summary output is
+/// Assert that fd produces this exact stdout (--summarize output is
 /// order- and alignment-sensitive, so the normalizing assert_output
 /// helpers cannot be used).
 #[cfg(test)]
@@ -2563,7 +2563,7 @@ fn assert_exact_output(te: &TestEnv, args: &[&str], expected: &str) {
     assert_eq!(String::from_utf8_lossy(&output.stdout), expected);
 }
 
-/// File extensions summary (--summary fext)
+/// File extensions summary (--summarize fext)
 #[test]
 fn test_summary_fext() {
     let te = TestEnv::new(
@@ -2587,7 +2587,7 @@ fn test_summary_fext() {
     // Case-insensitive, default sort (ascending count, ties by name).
     assert_exact_output(
         &te,
-        &["--summary", "fext:i"],
+        &["--summarize", "fext:i"],
         "1 txt
 2 (none)
 2 pdf
@@ -2598,7 +2598,7 @@ fn test_summary_fext() {
     // Dotfiles are counted by their entire filename.
     assert_exact_output(
         &te,
-        &["--hidden", "--summary", "fext:i"],
+        &["--hidden", "--summarize", "fext:i"],
         "1 .fdignore
 1 .git
 1 .gitignore
@@ -2612,7 +2612,7 @@ fn test_summary_fext() {
     // '-d' excludes dotfiles from the summary.
     assert_exact_output(
         &te,
-        &["--hidden", "--summary", "fext:i-d"],
+        &["--hidden", "--summarize", "fext:i-d"],
         "1 txt
 2 (none)
 2 pdf
@@ -2623,7 +2623,7 @@ fn test_summary_fext() {
     // '-i' keeps case variations of an extension distinct.
     assert_exact_output(
         &te,
-        &["--summary", "fext:-i"],
+        &["--summarize", "fext:-i"],
         "1 PNG
 1 txt
 2 (none)
@@ -2635,7 +2635,7 @@ fn test_summary_fext() {
     // '-s' sorts by descending count.
     assert_exact_output(
         &te,
-        &["--summary", "fext:i-s"],
+        &["--summarize", "fext:i-s"],
         "3 png
 2 (none)
 2 pdf
@@ -2656,7 +2656,7 @@ fn test_summary_fext_alignment() {
 
     assert_exact_output(
         &te,
-        &["--summary", "fext"],
+        &["--summarize", "fext"],
         " 1 (none)
  1 b
 10 a
@@ -2669,14 +2669,14 @@ fn test_summary_fext_alignment() {
 fn test_summary_invalid_spec() {
     let te = TestEnv::new(&[], &["a.png"]);
 
-    te.assert_failure(&["--summary", "bogus"]);
-    te.assert_failure(&["--summary", "fext:z"]);
-    te.assert_failure(&["--summary", "fext:-"]);
-    // --summary replaces the normal output, so it conflicts with other
+    te.assert_failure(&["--summarize", "bogus"]);
+    te.assert_failure(&["--summarize", "fext:z"]);
+    te.assert_failure(&["--summarize", "fext:-"]);
+    // --summarize replaces the normal output, so it conflicts with other
     // output-consuming options.
-    te.assert_failure(&["--summary", "fext", "--exec", "echo"]);
-    te.assert_failure(&["--summary", "fext", "--quiet"]);
-    te.assert_failure(&["--summary", "fext", "--format", "{}"]);
+    te.assert_failure(&["--summarize", "fext", "--exec", "echo"]);
+    te.assert_failure(&["--summarize", "fext", "--quiet"]);
+    te.assert_failure(&["--summarize", "fext", "--format", "{}"]);
 }
 
 /// No file extension (test for the pattern provided in the --help text)

@@ -28,7 +28,7 @@ use crate::value_help::{self, OrHelp};
     about = "A program to find entries in your filesystem with regex and glob based matching. By default, fd respects gitignore rules, ignores hidden directories, and is case insensitive.",
     after_help = "Many options accept 'help' as a value for details on their syntax (e.g. 'fd -S help').",
     after_long_help = "Many options with non-obvious value syntax (-t, -S, -R, -x, -X, --changed-within, \
-                       --changed-before, --summary, --bash, --prune-if, --exclude-if) accept the literal \
+                       --changed-before, --summarize, --bash, --prune-if, --exclude-if) accept the literal \
                        value 'help' to print a focused cheat-sheet (e.g. 'fd -S help').\n\n\
                        Bugs can be reported on GitHub: https://github.com/sharkdp/fd/issues",
     max_term_width = 98,
@@ -705,9 +705,9 @@ pub struct Opts {
     /// {n}    d    include dotfiles (default: enabled)
     /// {n}    s    sort by ascending count (default); '-s' sorts by descending count
     ///
-    /// Examples: '--summary fext', '--summary fext:@d-i-s'
+    /// Examples: '--summarize fext', '--summarize fext:@d-i-s'
     #[arg(
-        long,
+        long = "summarize",
         value_name = "summary-spec",
         value_parser = OrHelp::new(str::parse::<SummarySpec>, value_help::SUMMARY),
         conflicts_with_all(["execs", "format", "quiet"]),
