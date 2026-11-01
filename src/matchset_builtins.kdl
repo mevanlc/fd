@@ -59,6 +59,10 @@
     (d) path literal full {
         (windows) "$<vroot>/System Volume Information"
     }
+    (d) path literal full {
+        (macos) "$<vroot>/.Spotlight-V100"
+        (macos) "$<vroot>/.fseventsd"
+    }
 }
 
 // Trash locations across platforms. $<home>-anchored patterns only match
