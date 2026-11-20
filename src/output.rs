@@ -93,7 +93,7 @@ pub struct ListDetails {
 pub struct ListDetailsWidths([usize; 6]);
 
 impl ListDetailsWidths {
-    const STREAMING: Self = Self([10, 2, 8, 8, 5, 0]);
+    const STREAMING: Self = Self([10, 3, 8, 8, 5, 0]);
 
     pub fn for_rows(rows: &[ListDetails]) -> Self {
         let mut widths = [0; 6];
