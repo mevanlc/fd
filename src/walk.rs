@@ -229,7 +229,7 @@ impl<'a, W: Write> ReceiverBuffer<'a, W> {
                                         }
                                     }
                                     ReceiverMode::Streaming => {
-                                        self.print(&dir_entry)?;
+                                        self.print(&dir_entry, None)?;
                                     }
                                 }
                             }
@@ -266,8 +266,13 @@ impl<'a, W: Write> ReceiverBuffer<'a, W> {
     }
 
     /// Output a path.
-    fn print(&mut self, entry: &DirEntry) -> Result<(), ExitCode> {
-        if let Err(e) = output::print_entry(&mut self.stdout, entry, self.config)
+    fn print(
+        &mut self,
+        entry: &DirEntry,
+        listing: Option<(&output::ListDetails, &output::ListDetailsWidths)>,
+    ) -> Result<(), ExitCode> {
+        if let Err(e) =
+            output::print_entry_with_layout(&mut self.stdout, entry, self.config, listing)
             && e.kind() != ::std::io::ErrorKind::BrokenPipe
         {
             print_error(format!("Could not write to output: {e}"));
@@ -289,7 +294,7 @@ impl<'a, W: Write> ReceiverBuffer<'a, W> {
 
         let buffer = mem::take(&mut self.buffer);
         for path in buffer {
-            self.print(&path)?;
+            self.print(&path, None)?;
         }
 
         self.flush()
@@ -314,7 +319,17 @@ impl<'a, W: Write> ReceiverBuffer<'a, W> {
 
         if self.mode == ReceiverMode::Buffering {
             self.sort_buffer();
-            self.stream()?;
+            if self.config.list_details {
+                let buffer = mem::take(&mut self.buffer);
+                let rows: Vec<_> = buffer.iter().map(output::ListDetails::new).collect();
+                let widths = output::ListDetailsWidths::for_rows(&rows);
+                for (entry, row) in buffer.iter().zip(&rows) {
+                    self.print(entry, Some((row, &widths)))?;
+                }
+                self.flush()?;
+            } else {
+                self.stream()?;
+            }
         }
 
         if self.config.quiet {

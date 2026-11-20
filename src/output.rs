@@ -11,6 +11,7 @@ use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use winapi_util::{Handle, file};
 
 use lscolors::{Indicator, LsColors, Style};
+use unicode_width::UnicodeWidthStr;
 
 use jiff::Zoned;
 use jiff::fmt::StdIoWrite;
@@ -37,6 +38,15 @@ fn replace_path_separator(path: &str, new_path_separator: &str) -> String {
 
 // TODO: this function is performance critical and can probably be optimized
 pub fn print_entry<W: Write>(stdout: &mut W, entry: &DirEntry, config: &Config) -> io::Result<()> {
+    print_entry_with_layout(stdout, entry, config, None)
+}
+
+pub fn print_entry_with_layout<W: Write>(
+    stdout: &mut W,
+    entry: &DirEntry,
+    config: &Config,
+    listing: Option<(&ListDetails, &ListDetailsWidths)>,
+) -> io::Result<()> {
     let mut has_hyperlink = false;
     if config.hyperlink
         && let Some(url) = PathUrl::new(entry.path())
@@ -46,7 +56,16 @@ pub fn print_entry<W: Write>(stdout: &mut W, entry: &DirEntry, config: &Config) 
     }
 
     if config.list_details {
-        print_entry_list_details(stdout, entry, config)?;
+        let fallback;
+        let (details, widths) = match listing {
+            Some(listing) => listing,
+            None => {
+                fallback = ListDetails::new(entry);
+                (&fallback, &ListDetailsWidths::STREAMING)
+            }
+        };
+        details.print(stdout, widths)?;
+        write!(stdout, "{}", format_path_with_symlink_target(entry, config))?;
     } else if let Some(ref format) = config.format {
         print_entry_format(stdout, entry, config, format)?;
     } else if let Some(ref ls_colors) = config.ls_colors {
@@ -66,35 +85,67 @@ pub fn print_entry<W: Write>(stdout: &mut W, entry: &DirEntry, config: &Config) 
     }
 }
 
-fn print_entry_list_details<W: Write>(
-    stdout: &mut W,
-    entry: &DirEntry,
-    config: &Config,
-) -> io::Result<()> {
-    let file_type = file_type_char(entry);
-    let permissions = entry
-        .metadata()
-        .map(format_permissions)
-        .unwrap_or_else(|| "---------".to_string());
-    let links = number_of_links(entry);
-    let (owner, group) = entry
-        .metadata()
-        .map(owner_group)
-        .unwrap_or_else(|| (String::from("-"), String::from("-")));
-    let size = entry
-        .metadata()
-        .map(|m| format_human_size(m.len()))
-        .unwrap_or_else(|| "?".to_string());
-    let modified = entry
-        .metadata()
-        .map(format_modified_timestamp)
-        .unwrap_or_else(|| "-".to_string());
-    let path = format_path_with_symlink_target(entry, config);
+/// Formatted metadata retained so width planning and printing use identical values.
+pub struct ListDetails {
+    columns: [String; 6],
+}
 
-    write!(
-        stdout,
-        "{file_type}{permissions} {links:>2} {owner:<8} {group:<8} {size:>5} {modified} {path}"
-    )
+pub struct ListDetailsWidths([usize; 6]);
+
+impl ListDetailsWidths {
+    const STREAMING: Self = Self([10, 2, 8, 8, 5, 0]);
+
+    pub fn for_rows(rows: &[ListDetails]) -> Self {
+        let mut widths = [0; 6];
+        for row in rows {
+            for (width, column) in widths.iter_mut().zip(&row.columns) {
+                *width = (*width).max(column.width());
+            }
+        }
+        Self(widths)
+    }
+}
+
+impl ListDetails {
+    pub fn new(entry: &DirEntry) -> Self {
+        let permissions = entry
+            .metadata()
+            .map(format_permissions)
+            .unwrap_or_else(|| "---------".to_string());
+        let (owner, group) = entry
+            .metadata()
+            .map(owner_group)
+            .unwrap_or_else(|| (String::from("-"), String::from("-")));
+        Self {
+            columns: [
+                format!("{}{permissions}", file_type_char(entry)),
+                number_of_links(entry).to_string(),
+                owner,
+                group,
+                entry
+                    .metadata()
+                    .map(|m| format_human_size(m.len()))
+                    .unwrap_or_else(|| "?".to_string()),
+                entry
+                    .metadata()
+                    .map(format_modified_timestamp)
+                    .unwrap_or_else(|| "-".to_string()),
+            ],
+        }
+    }
+
+    fn print<W: Write>(&self, stdout: &mut W, widths: &ListDetailsWidths) -> io::Result<()> {
+        for (index, (column, width)) in self.columns.iter().zip(widths.0).enumerate() {
+            let padding = width.saturating_sub(column.width());
+            // Link counts and sizes are right-aligned; text is left-aligned.
+            if matches!(index, 1 | 4) {
+                write!(stdout, "{:padding$}{column} ", "")?;
+            } else {
+                write!(stdout, "{column}{:padding$} ", "")?;
+            }
+        }
+        Ok(())
+    }
 }
 
 fn format_path_with_symlink_target(entry: &DirEntry, config: &Config) -> String {
@@ -436,6 +487,39 @@ fn print_entry_uncolorized<W: Write>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn list_details_aligns_columns_by_display_width() {
+        let rows = [
+            ListDetails {
+                columns: ["-rw-r--r--", "1", "界", "e\u{301}", "1", "-"].map(String::from),
+            },
+            ListDetails {
+                columns: [
+                    "drwxr-xr-x",
+                    "123",
+                    "longusername",
+                    "longgroupname",
+                    "999.9K",
+                    "Nov 19 12:00",
+                ]
+                .map(String::from),
+            },
+        ];
+        let widths = ListDetailsWidths::for_rows(&rows);
+        let mut output = Vec::new();
+        for row in &rows {
+            row.print(&mut output, &widths).unwrap();
+            writeln!(output, "path").unwrap();
+        }
+        assert_eq!(
+            String::from_utf8(output).unwrap(),
+            concat!(
+                "-rw-r--r--   1 界           e\u{301}                  1 -            path\n",
+                "drwxr-xr-x 123 longusername longgroupname 999.9K Nov 19 12:00 path\n",
+            ),
+        );
+    }
 
     #[test]
     fn list_details_timestamp_uses_recent_format_for_recent_times() {

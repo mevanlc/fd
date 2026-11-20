@@ -326,6 +326,11 @@ can be combined with `--absolute-path` and `--sort`. Using `-x/--exec` or
 `-X/--exec-batch` silently disables long listing, so `fd -emd -l -x file`
 runs `file` on each Markdown match and `fd -emd -l -X file` runs it in batches.
 
+When all results are buffered, long listing sizes each metadata column to its
+widest displayed value, aligning numeric columns on the right and text on the
+left. This applies to sorted listings and searches that finish before switching
+to streaming. Streaming listings use fixed minimum widths as results arrive.
+
 `-P`/`--no-full-path` can undo an earlier `-p`/`--full-path`, which is
 useful when the fork is wrapped in a search-everything alias:
 

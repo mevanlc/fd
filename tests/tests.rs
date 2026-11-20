@@ -4251,6 +4251,73 @@ fn test_list_details() {
 }
 
 #[test]
+fn test_list_details_plans_buffered_column_widths() {
+    let te = TestEnv::new(&[], &["small", "large"]);
+    remove_symlink(te.test_root().join("symlink"));
+    fs::File::options()
+        .write(true)
+        .open(te.test_root().join("small"))
+        .unwrap()
+        .set_len(1)
+        .unwrap();
+    fs::File::options()
+        .write(true)
+        .open(te.test_root().join("large"))
+        .unwrap()
+        .set_len(1234)
+        .unwrap();
+    // Hidden links change the displayed count without adding search results.
+    for index in 0..11 {
+        fs::hard_link(
+            te.test_root().join("large"),
+            te.test_root().join(format!(".link{index}")),
+        )
+        .unwrap();
+    }
+
+    let row = Regex::new(r"^(\S+) +(\d+) +(\S+) +(\S+) +(\S+) +(.{12}) (.+)$").unwrap();
+    for options in [
+        vec!["-l", "--max-buffer-time", "60000"],
+        vec!["-l", "--sort", "n"],
+    ] {
+        let output = te.assert_success_and_get_output(".", &options);
+        let stdout = String::from_utf8(output.stdout).unwrap();
+        let lines: Vec<_> = stdout.lines().collect();
+        assert_eq!(lines.len(), 2, "{stdout}");
+        let large = row.captures(lines[0]).expect("large row");
+        let small = row.captures(lines[1]).expect("small row");
+        assert_eq!(&large[2], "12");
+        assert_eq!(&small[2], "1");
+        // Numeric columns share their right edge; text columns their left edge.
+        for index in [2, 5] {
+            assert_eq!(
+                large.get(index).unwrap().end(),
+                small.get(index).unwrap().end()
+            );
+        }
+        for index in [3, 4, 6, 7] {
+            assert_eq!(
+                large.get(index).unwrap().start(),
+                small.get(index).unwrap().start()
+            );
+        }
+        // Widths are fitted to actual content, including owners shorter than eight.
+        assert_eq!(
+            large.get(3).unwrap().start(),
+            large.get(2).unwrap().end() + 1
+        );
+        assert_eq!(
+            large.get(4).unwrap().start(),
+            large.get(3).unwrap().end() + 1
+        );
+        assert_eq!(
+            large.get(5).unwrap().start(),
+            large.get(4).unwrap().end() + 1
+        );
+    }
+}
+
+#[test]
 fn test_list_details_with_exec() {
     let te = TestEnv::new(&[], &["a.md", "b.md", "c.txt"]).normalize_line(true);
 
