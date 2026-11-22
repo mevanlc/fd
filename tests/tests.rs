@@ -1216,6 +1216,23 @@ fn test_follow() {
     );
 }
 
+#[cfg(any(unix, windows))]
+#[test]
+fn test_file_system_boundary_aliases() {
+    let te = TestEnv::new(&[], &["report.txt"]);
+    for alias in ["--xdev", "--one-filesystem", "--mount"] {
+        te.assert_output(&[alias, "--exact", "report.txt"], "report.txt");
+    }
+
+    let long_help = te.assert_success_and_get_normalized_output(".", &["--help"]);
+    assert!(long_help.contains("--xdev"));
+    assert!(!long_help.contains("--one-filesystem"));
+
+    let short_help = te.assert_success_and_get_normalized_output(".", &["-h"]);
+    assert!(!short_help.contains("--xdev"));
+    assert!(!short_help.contains("--one-filesystem"));
+}
+
 // File system boundaries (--one-file-system)
 // Limited to Unix because, to the best of my knowledge, there is no easy way to test a use case
 // file systems mounted into the tree on Windows.

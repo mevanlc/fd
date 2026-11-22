@@ -932,7 +932,13 @@ pub struct Opts {
     /// different file system than the one it started in. Comparable to the -mount
     /// or -xdev filters of find(1).
     #[cfg(any(unix, windows))]
-    #[arg(long, aliases(&["mount", "xdev"]), hide_short_help = true, long_help)]
+    #[arg(
+        long,
+        aliases(&["mount", "one-filesystem"]),
+        visible_alias = "xdev",
+        hide_short_help = true,
+        long_help
+    )]
     pub one_file_system: bool,
 
     #[cfg(feature = "completions")]

@@ -108,6 +108,7 @@ _fd() {
     $no"--one-file-system[don't descend into directories on other file systems]"
     '!--mount'
     '!--xdev'
+    '!--one-filesystem'
 
     + dir-depth # directory depth
     '(--exact-depth -d --max-depth)'{-d+,--max-depth=}'[set max directory depth to descend when searching]:depth'
